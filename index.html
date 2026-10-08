@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Hirantha Rathnayaka · Full Stack Software Engineer</title>
+  <meta name="description" content="Hirantha Rathnayaka, Full Stack Software Engineer in Colombo, Sri Lanka. React, Next.js, Node.js and NestJS projects, shown in a rainy neon 3D chess plaza.">
+  <meta name="theme-color" content="#07060c">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <!-- Update og:url once you have a domain; add /public/og.jpg (1200x630) for link previews. -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Hirantha's Gambit · Hirantha Rathnayaka">
+  <meta property="og:description" content="Full Stack Software Engineer. Press START and explore my projects on a 3D chessboard.">
+  <meta property="og:image" content="/og.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Monoton&display=swap">
+</head>
+<body>
+  <canvas id="c" aria-label="3D chess plaza. Use the menu at the bottom to open each section."></canvas>
+
+  <div id="start">
+    <div class="st-top">Hirantha Rathnayaka · Full Stack Software Engineer</div>
+    <button id="startBtn" disabled aria-label="Start">START</button>
+    <div class="st-load" id="stLoad">Setting up the board…</div>
+    <button class="st-quick" id="quickBtn">Quick view, no 3D</button>
+    <div class="st-foot">Best with sound on · rain, thunder and wooden pieces</div>
+  </div>
+
+  <header class="hud">
+    <div class="brand"><span class="logo" aria-hidden="true">♞</span><div><b>Hirantha Rathnayaka</b><span>Full Stack Software Engineer · Colombo</span></div></div>
+    <button class="chip" id="snd" aria-pressed="true"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span><span id="sndLabel">Sound on</span></button>
+  </header>
+
+  <nav class="dock" id="dock" aria-label="Sections">
+    <button data-go="home" style="--c:var(--cream)"><span class="g">♟</span><span class="l">Board</span></button>
+    <button data-go="projects" style="--c:var(--magenta)"><span class="g">♕</span><span class="l">Projects</span></button>
+    <button data-go="experience" style="--c:var(--amber)"><span class="g">♖</span><span class="l">Experience</span></button>
+    <button data-go="skills" style="--c:var(--violet)"><span class="g">♗</span><span class="l">Skills</span></button>
+    <button data-go="about" style="--c:var(--cyan)"><span class="g">♔</span><span class="l">About</span></button>
+    <button data-go="contact" style="--c:var(--mint)"><span class="g">♘</span><span class="l">Contact</span></button>
+  </nav>
+  <div id="hint"></div>
+  <div id="tip"></div>
+
+  <aside id="panel" hidden aria-live="polite">
+    <div class="p-head">
+      <div class="p-glyph" id="pGlyph" aria-hidden="true"></div>
+      <div style="min-width:0"><div class="eyebrow" id="pEyebrow"></div><h2 id="pTitle"></h2></div>
+      <button class="p-close" id="pClose" aria-label="Back to the board"><span>Esc</span>✕</button>
+    </div>
+    <div class="p-body" id="pBody"></div>
+  </aside>
+
+  <!-- Quick view: real HTML that recruiters, screen readers and search engines can read.
+       Keep it in sync with src/data/content.js. -->
+  <main id="quick" class="quick" hidden>
+    <button class="btn-sm close-q" id="quickClose">Back to the 3D board</button>
+    <div class="quick-in">
+      <h1>Hirantha Rathnayaka</h1>
+      <p class="role">Full Stack Software Engineer · Colombo, Sri Lanka</p>
+      <p>I build production web apps end to end: React and Next.js front ends, Node.js, Express and NestJS services, SQL and NoSQL data, deployed on AWS and Azure. 4+ years of experience and 10+ delivered projects. All-Island chess 2nd runner-up.</p>
+
+      <h2>Projects</h2>
+      <ul>
+        <li><a href="https://exploretureweb.vercel.app/" rel="noopener">Exploreture</a>: recruitment platform with job seeker, employer and admin portals. NestJS, MongoDB, Next.js, hexagonal architecture, JWT/OAuth.</li>
+        <li><a href="https://www.tuitionlanka.com/en" rel="noopener">TuitionLanka</a>: trilingual tutor-matching marketplace. Next.js, RTK Query, Azure Blob Storage.</li>
+        <li>VivoAssist: document-intelligence SaaS with natural-language search and citations. Next.js, TypeScript.</li>
+        <li><a href="https://softmatter.io/" rel="noopener">Softmatter by MAS Holdings</a>: corporate site with headless Shopify commerce. Gatsby, React.</li>
+        <li><a href="https://watawalatea.lk/" rel="noopener">Watawala Tea</a>: trilingual brand site with Firebase forms and SEO. Gatsby.</li>
+        <li><a href="https://www.nftautostore.io/" rel="noopener">NFT Auto Store</a>: e-commerce platform for NFT trading.</li>
+        <li><a href="https://katakaliveinconcert.com/" rel="noopener">Kataka Live In Concert</a>: concert event site. Next.js, React.</li>
+        <li><a href="https://nsdconsultingservices.com/" rel="noopener">NSD Consulting Services</a>: WordPress site with React components for a UAE consulting firm.</li>
+      </ul>
+
+      <h2>Experience</h2>
+      <ul>
+        <li><strong>Software Engineer</strong>, Softvil Technologies · Jun 2025 – Present</li>
+        <li><strong>Freelance Software Developer</strong>, Web development &amp; SEO · Aug 2024 – Jun 2025</li>
+        <li><strong>Web Developer</strong>, Stalione Group (Pvt) Ltd · Nov 2023 – Aug 2024</li>
+        <li><strong>Associate Software Engineer</strong>, Explorelogy · Mar 2023 – Nov 2023</li>
+        <li><strong>Associate UI/UX Engineer</strong>, Explorelogy · Sep 2022 – Feb 2023</li>
+        <li><strong>Software Engineer Intern</strong>, Explorelogy · Feb 2022 – Aug 2022</li>
+      </ul>
+
+      <h2>Skills</h2>
+      <p>JavaScript, TypeScript, PHP, React.js, Next.js, Node.js, Express.js, NestJS, Gatsby.js, AngularJS, Tailwind CSS, PostgreSQL, MySQL, MongoDB, Firebase, AWS, Azure, Docker, CI/CD, GraphQL, Redux / RTK Query, WordPress, Agile / Scrum, RESTful API design, on-page SEO, UI/UX prototyping.</p>
+
+      <h2>Education</h2>
+      <p>Bachelor of Software Engineering (Hons), The Open University of Sri Lanka, 2019–2025.</p>
+
+      <h2>Contact</h2>
+      <p>Email: hiranthaviraj@gmail.com<br>
+        GitHub: <a href="https://github.com/Hirantha12" rel="noopener">github.com/Hirantha12</a><br>
+        LinkedIn: <a href="https://www.linkedin.com/in/hirantha-rathnayaka" rel="noopener">linkedin.com/in/hirantha-rathnayaka</a></p>
+    </div>
+  </main>
+  <noscript><style>#quick{display:block!important}#start{display:none}</style></noscript>
+
+  <script type="module" src="/src/main.js"></script>
+  <script>
+    // Quick view works even before the 3D scene loads.
+    (function () {
+      var q = document.getElementById('quick');
+      document.getElementById('quickBtn').addEventListener('click', function () { q.hidden = false; q.scrollTop = 0; });
+      document.getElementById('quickClose').addEventListener('click', function () { q.hidden = true; });
+    })();
+  </script>
+</body>
+</html>
