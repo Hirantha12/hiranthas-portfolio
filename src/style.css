@@ -192,3 +192,6 @@ body.ready.home #hint{opacity:.9}
 .quick a{color:var(--cream)}
 .quick a:hover{color:var(--magenta)}
 .quick .close-q{position:fixed;top:calc(14px + env(safe-area-inset-top,0px));right:16px}
+
+/* small screens: shorter, smaller hint */
+@media (max-width:700px){#hint{font-size:10px;letter-spacing:.12em;bottom:calc(72px + env(safe-area-inset-bottom,0px))}}
