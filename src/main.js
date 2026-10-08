@@ -74,10 +74,29 @@ function start() {
   let yaw = 0, yawTarget = 0, yawVel = 0, pitch = 0, pitchTarget = 0, zoom = 1, zoomTarget = 1;
   const sph = new THREE.Spherical();
   const par = { x: 0, y: 0 }, mouse = { x: 0, y: 0 };
-  const portraitK = () => clamp(1.7 / (innerWidth / innerHeight), 1, 2.6);
+  // Narrow screens (phones, half-width windows): widen the lens up to 58° first, then pull the
+  // camera back by at most 1.6x. Thin the fog and enlarge the labels to match, so the plaza
+  // stays bright and readable instead of shrinking into the fog.
+  const BASE_HALF_W = Math.tan(THREE.MathUtils.degToRad(20)) * 1.78; // the desktop's horizontal view
+  for (const key in giants) giants[key].baseLw = giants[key].lw;
+  let K = 1;
+  function applyLens() {
+    const a = innerWidth / innerHeight;
+    const fov = clamp(THREE.MathUtils.radToDeg(2 * Math.atan(BASE_HALF_W / a)), 40, 58);
+    K = clamp(BASE_HALF_W / (Math.tan(THREE.MathUtils.degToRad(fov / 2)) * a), 1, 1.6);
+    camera.fov = fov; camera.aspect = a; camera.updateProjectionMatrix();
+    scene.fog.density = 0.026 / Math.pow(K, 1.4);
+    const ls = (1 + (K - 1) * 0.9) * (innerWidth < 700 ? 1.15 : 1);
+    for (const key in giants) { const g = giants[key]; g.lw = g.baseLw * ls; g.label.scale.set(g.lw, (g.lw * 200) / 640, 1); }
+  }
+  const hintText = () => (innerWidth < 700
+    ? (TOUCH ? 'Tap a piece · drag to orbit' : 'Click a piece · drag to orbit')
+    : (TOUCH ? 'Tap a giant piece · drag to orbit 360°' : 'Click a giant piece · drag to orbit 360° · scroll to zoom · double-click to reset'));
+  const portraitK = () => K;
+  applyLens();
   const isDesktop = () => innerWidth > 860;
 
-  function homeView() { const k = portraitK(); return { pos: new V3(0, 6.4 + (k - 1) * 5, 17.5 * k), tgt: new V3(0, 2.3, -1.5) }; }
+  function homeView() { const k = portraitK(); return { pos: new V3(0, 6.4 + (k - 1) * 1.5, 17.5 * k), tgt: new V3(0, 2.1 - (k - 1) * 0.8, -1.5) }; }
   function sectionView(key) {
     const k = Math.min(portraitK(), 2.2);
     if (key === 'projects') { const t = new V3(0, 1.1, 0.45); return { pos: t.clone().add(new V3(0, 4.4, 5.4).multiplyScalar(k)), tgt: t }; }
@@ -309,7 +328,7 @@ function start() {
     ft.to(signMat, { opacity: 1, duration: 0.2 }).to(signLight, { intensity: P(1.4), duration: 0.4 }, '<');
     setTimeout(() => {
       mode = 'home'; updateDock();
-      $('#hint').textContent = TOUCH ? 'Tap a giant piece · drag to orbit 360°' : 'Click a giant piece · drag to orbit 360° · scroll to zoom · double-click to reset';
+      $('#hint').textContent = hintText();
       document.body.classList.add('ready');
       if (deepLink && SECTIONS[deepLink]) goTo(deepLink);
       setTimeout(lightning, 4000); scheduleLightning();
@@ -358,7 +377,8 @@ function start() {
   requestAnimationFrame(frame);
 
   addEventListener('resize', () => {
-    camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+    applyLens();
+    if (document.body.classList.contains('ready')) $('#hint').textContent = hintText();
     renderer.setSize(innerWidth, innerHeight);
     if (composer) composer.setSize(innerWidth, innerHeight);
     if (mode !== 'intro') {
