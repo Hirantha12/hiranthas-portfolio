@@ -19,6 +19,7 @@ import { SECTIONS, PROJECTS, GLYPH } from './data/content.js';
 import { Snd } from './audio/sound.js';
 import { setMaxAnisotropy } from './scene/canvas.js';
 import { buildWorld, P } from './scene/world.js';
+import { createGame } from './scene/game.js';
 import { createPanel } from './ui/panel.js';
 
 // Colour setup: this matches the look of the original r128 prototype (linear, no colour
@@ -82,6 +83,7 @@ function start() {
      CAMERA + VIEWS
      ========================================================= */
   const cam = { px: 0, py: 28, pz: 46, tx: 0, ty: 0, tz: -2 };
+  if (import.meta.env.DEV) window.__dbg.cam = cam;
   let yaw = 0, yawTarget = 0, yawVel = 0, pitch = 0, pitchTarget = 0, zoom = 1, zoomTarget = 1;
   const sph = new THREE.Spherical();
   const par = { x: 0, y: 0 }, mouse = { x: 0, y: 0 };
@@ -101,8 +103,8 @@ function start() {
     for (const key in giants) { const g = giants[key]; g.lw = g.baseLw * ls; g.label.scale.set(g.lw, (g.lw * 200) / 640, 1); }
   }
   const hintText = () => (innerWidth < 700
-    ? (TOUCH ? 'Tap a piece · drag to orbit' : 'Click a piece · drag to orbit')
-    : (TOUCH ? 'Tap a giant piece · drag to orbit 360°' : 'Click a giant piece · drag to orbit 360° · scroll to zoom · double-click to reset'));
+    ? (TOUCH ? 'Tap a piece · drag to orbit · pinch to zoom' : 'Click a piece · drag to orbit')
+    : (TOUCH ? 'Tap a giant piece · drag to orbit 360° · pinch to zoom · double-tap to reset' :'Click a giant piece · drag to orbit 360° · scroll to zoom · double-click to reset'));
   const portraitK = () => K;
   applyLens();
   const isDesktop = () => innerWidth > 860;
@@ -130,7 +132,20 @@ function start() {
     else off.addScaledVector(up, -0.5 * halfH);
     return { pos: pos.add(off), tgt: tgt.add(off) };
   }
-  const viewFor = (m) => (m === 'home' ? homeView() : framed(sectionView(m)));
+  // "Play for them": the visitor sits on the plaza side as Black, facing Hirantha and his kiosk.
+  // The camera backs off just enough for the board and the clock (on the right) to fit the part
+  // of the screen the panel leaves free; tall phones look down more steeply.
+  const portrait = () => camera.aspect < 1;
+  function gameView() {
+    const a = camera.aspect, tall = portrait();
+    // tall: Hirantha at the top, the board, then the clock in front of it
+    const tgt = tall ? new V3(0, 1.65, 0.0) : new V3(0.45, 1.1, 0.5);
+    const free = isDesktop() ? (innerWidth - Math.min(460, innerWidth * 0.42) - 32) / innerWidth : 1;
+    const halfW = Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * a * free);
+    const dist = (tall ? 2.95 : 3.25) / Math.tan(halfW), el = THREE.MathUtils.degToRad(tall ? 52 : 34);
+    return { pos: new V3(tgt.x, tgt.y + dist * Math.sin(el), tgt.z + dist * Math.cos(el)), tgt };
+  }
+  const viewFor = (m) => (m === 'home' ? homeView() : m === 'projects' && game.active ? framed(gameView()) : framed(sectionView(m)));
   function flyTo(v, dur, ease) {
     gsap.to(cam, { px: v.pos.x, py: v.pos.y, pz: v.pos.z, tx: v.tgt.x, ty: v.tgt.y, tz: v.tgt.z, duration: REDUCE ? Math.min(dur, 0.8) : dur, ease: ease || 'power3.inOut', overwrite: true });
   }
@@ -139,7 +154,55 @@ function start() {
      PANEL + PROJECT BOARD
      ========================================================= */
   let mode = 'intro', activeProject = -1;
-  const panel = createPanel({ onSelectProject: (i) => selectProject(i), getActiveProject: () => activeProject });
+  const game = createGame({
+    scene, board: W.board, boardTop: W.boardTop, sqPos, ivory: W.ivoryS, ebony: W.ebonyS, reduce: REDUCE,
+    onChange: (info) => panel.gameUpdate(info),
+  });
+  const panel = createPanel({
+    onSelectProject: (i) => selectProject(i), getActiveProject: () => activeProject,
+    onGame: (action) => {
+      if (action === 'play' || action === 'replay') startGame();
+      else if (action === 'exit') exitGame();
+      else if (action === 'contact') goTo('contact');
+    },
+  });
+
+  // Cartoon Hirantha is only downloaded the first time someone plays, so the site's first load
+  // is unchanged. If it fails to load, the game still works without him.
+  let avatarLoading = false;
+  function loadAvatar() {
+    if (avatarLoading) return;
+    avatarLoading = true;
+    import('./scene/avatar.js')
+      .then(({ createAvatar }) => game.setAvatar(createAvatar({ scene, position: new V3(0, 0, -2.72) })))
+      .catch(() => {});
+  }
+
+  function startGame() {
+    if (mode !== 'projects') return;
+    loadAvatar();
+    if (!game.active) { // swap the eight project pieces for a full set
+      setActive(-1);
+      projPieces.forEach((pp, i) => {
+        gsap.to(pp.holder.position, { y: -0.4, duration: 0.35, delay: i * 0.03, ease: 'power2.in', overwrite: true });
+        gsap.to(pp.holder.scale, { x: 0.001, y: 0.001, z: 0.001, duration: 0.35, delay: i * 0.03, overwrite: true, onComplete: () => { pp.holder.visible = false; } });
+      });
+    }
+    clearHover();
+    panel.startGame(); // before game.enter(), which posts the first status line
+    game.enter(portrait());
+    document.body.classList.add('in-game');
+    flyTo(framed(gameView()), 2.0);
+  }
+  function exitGame() {
+    if (!game.active) return;
+    game.exit();
+    document.body.classList.remove('in-game');
+    if (mode !== 'projects') return;
+    boardToProjects();
+    panel.refreshProjects();
+    flyTo(framed(sectionView('projects')), 1.8);
+  }
 
   function boardToProjects() {
     decor.forEach((p, i) => {
@@ -197,7 +260,7 @@ function start() {
     if (mode === 'intro' || key === mode) return;
     const prev = mode; mode = key;
     Snd.tick(); resetOrbit(); clearHover(); updateDock();
-    if (prev === 'projects') boardToDecor();
+    if (prev === 'projects') { if (game.active) { game.exit(); document.body.classList.remove('in-game'); } boardToDecor(); }
     if (key === 'home') { panel.close(); flyTo(homeView(), 1.9); history.replaceState(null, '', location.pathname); return; }
     activeProject = -1;
     flyTo(framed(sectionView(key)), 2.1);
@@ -209,8 +272,8 @@ function start() {
   $('#pClose').addEventListener('click', () => goTo('home'));
   addEventListener('keydown', (e) => {
     if (mode === 'intro') return;
-    if (e.key === 'Escape') { if (mode === 'projects' && activeProject >= 0) selectProject(-1); else goTo('home'); }
-    if (mode === 'projects' && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+    if (e.key === 'Escape') { if (game.active) exitGame(); else if (mode === 'projects' && activeProject >= 0) selectProject(-1); else goTo('home'); }
+    if (mode === 'projects' && !game.active && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
       const d = e.key === 'ArrowRight' ? 1 : -1, n = PROJECTS.length;
       selectProject(activeProject < 0 ? (d > 0 ? 0 : n - 1) : (activeProject + d + n) % n);
     }
@@ -228,13 +291,13 @@ function start() {
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(9, 9), tip = $('#tip');
   let ptrMoved = false, down = null, dragging = false, lastX = 0, lastY = 0, hoverId = null;
 
-  function pick() {
-    if (mode === 'intro') return null;
+  function pickAll() {
+    if (mode === 'intro') return [];
     ray.setFromCamera(ndc, camera);
-    const list = mode === 'projects' ? projMeshes : mode === 'home' ? giantMeshes.concat(sheetMeshes) : giantMeshes;
-    const hit = ray.intersectObjects(list, false)[0];
-    return hit ? hit.object.userData : null;
+    const list = mode === 'projects' ? (game.active ? game.pickList() : projMeshes) : mode === 'home' ? giantMeshes.concat(sheetMeshes) : giantMeshes;
+    return ray.intersectObjects(list, false);
   }
+  function pick() { const hit = pickAll()[0]; return hit ? hit.object.userData : null; }
   const showTip = (text, color) => { tip.textContent = text; tip.style.setProperty('--c', color); tip.classList.add('on'); };
   const hideTip = () => tip.classList.remove('on');
   const clearHover = () => setHover(null);
@@ -270,7 +333,17 @@ function start() {
   }
 
   const setNdc = (e) => { ndc.x = (e.clientX / innerWidth) * 2 - 1; ndc.y = -(e.clientY / innerHeight) * 2 + 1; };
+  // Touch: every finger is tracked so two fingers pinch-zoom instead of being read as a drag.
+  // A pinch locks out orbiting and tapping until all fingers are lifted.
+  const pointers = new Map();
+  let pinching = false, pinchDist = 0, pinchZoom = 1, lastTap = { t: 0, x: 0, y: 0 };
+  const fingerGap = () => { const [a, b] = [...pointers.values()]; return Math.hypot(a.x - b.x, a.y - b.y) || 1; };
   canvas.addEventListener('pointermove', (e) => {
+    if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinching) {
+      if (pointers.size >= 2 && mode === 'home') zoomTarget = clamp(pinchZoom * (pinchDist / fingerGap()), 0.5, 1.45);
+      return;
+    }
     setNdc(e); ptrMoved = true; mouse.x = ndc.x; mouse.y = ndc.y;
     tip.style.transform = `translate(${Math.min(e.clientX + 16, innerWidth - tip.offsetWidth - 8)}px, ${e.clientY + 18}px)`;
     if (down) {
@@ -284,17 +357,32 @@ function start() {
     }
   });
   canvas.addEventListener('pointerdown', (e) => {
-    setNdc(e); down = { x: e.clientX, y: e.clientY }; lastX = e.clientX; lastY = e.clientY; dragging = false; yawVel = 0;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    if (pointers.size === 2) { pinching = true; down = null; dragging = false; yawVel = 0; pinchDist = fingerGap(); pinchZoom = zoomTarget; hideTip(); return; }
+    if (pinching) return;
+    setNdc(e); down = { x: e.clientX, y: e.clientY }; lastX = e.clientX; lastY = e.clientY; dragging = false; yawVel = 0;
   });
-  canvas.addEventListener('pointerup', (e) => {
-    if (down && !dragging) {
+  function endPointer(e, cancelled) {
+    pointers.delete(e.pointerId);
+    if (pinching) { if (pointers.size === 0) pinching = false; return; }
+    if (down && !dragging && !cancelled && game.active && mode === 'projects') {
+      setNdc(e); game.tap(pickAll());
+    } else if (down && !dragging && !cancelled) {
       setNdc(e); const h = pick();
       if (h) { if (h.kind === 'section') goTo(h.key); else if (h.kind === 'sheet') goTo('about'); else selectProject(h.i); }
+      else if (e.pointerType === 'touch' && mode === 'home') {
+        // Double-tap on empty space resets the view, like double-click on desktop.
+        const now = performance.now();
+        if (now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40) { resetOrbit(); lastTap.t = 0; }
+        else lastTap = { t: now, x: e.clientX, y: e.clientY };
+      }
     }
     down = null; dragging = false;
     if (mode === 'home' && !hoverId) canvas.style.cursor = 'grab';
-  });
+  }
+  canvas.addEventListener('pointerup', (e) => endPointer(e, false));
+  canvas.addEventListener('pointercancel', (e) => endPointer(e, true));
   canvas.addEventListener('wheel', (e) => {
     if (mode !== 'home') return;
     e.preventDefault();
@@ -398,7 +486,13 @@ function start() {
     if (signOn && !REDUCE && Math.random() < 0.004) { signMat.opacity = 0.35; setTimeout(() => { signMat.opacity = 1; }, 60 + Math.random() * 100); }
     if (hl.visible) hl.material.opacity = 0.35 + Math.sin(elapsed * 4) * 0.15;
     codeT += dt; if (codeT > 0.07) { W.drawCode(codeT); codeT = 0; }
-    if (ptrMoved && !TOUCH && !down) { ptrMoved = false; setHover(pick()); }
+    if (ptrMoved && !TOUCH && !down) {
+      ptrMoved = false;
+      if (game.active && mode === 'projects') canvas.style.cursor = pick() ? 'pointer' : 'default';
+      else setHover(pick());
+    }
+    game.update(dt);
+    W.stringLights.visible = !game.active; // from the visitor's seat they'd hang right over his face
 
     if (!down && mode === 'home' && Math.abs(yawVel) > 0.0002) { yawTarget += yawVel; yawVel *= Math.pow(0.93, dt * 60); }
     const lerp = Math.min(1, dt * 6);
@@ -418,6 +512,7 @@ function start() {
 
   addEventListener('resize', () => {
     applyLens();
+    if (game.active) game.layout(portrait()); // phone rotated: move the clock
     if (document.body.classList.contains('ready')) $('#hint').textContent = hintText();
     renderer.setSize(innerWidth, innerHeight);
     if (composer) composer.setSize(innerWidth, innerHeight);

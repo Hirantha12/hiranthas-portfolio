@@ -195,3 +195,24 @@ body.ready.home #hint{opacity:.9}
 
 /* small screens: shorter, smaller hint */
 @media (max-width:700px){#hint{font-size:10px;letter-spacing:.12em;bottom:calc(72px + env(safe-area-inset-bottom,0px))}}
+
+/* ---------- "Play for them" game ---------- */
+.playcard{width:100%;display:grid;gap:4px;text-align:left;cursor:pointer;margin:0 0 18px;padding:14px 16px;background:linear-gradient(120deg,rgba(87,255,176,.10),rgba(255,61,154,.08));border:1px solid var(--mint);color:var(--text);box-shadow:inset 0 0 24px -12px var(--mint);transition:box-shadow .25s,transform .25s}
+.playcard:hover,.playcard:focus-visible{box-shadow:inset 0 0 30px -8px var(--mint),0 0 18px -6px var(--mint);transform:translateY(-1px)}
+.playcard .pc-k{font:600 11px var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--mint)}
+.playcard b{font-size:18px;color:var(--cream)}
+.playcard em{font-style:normal;font-size:13px;color:var(--muted);line-height:1.45}
+.gstat{position:sticky;top:-1px;z-index:1;margin:-4px 0 16px;padding:10px 12px;background:rgba(13,10,24,.96);border:1px solid var(--line)}
+.gtop{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px}
+.gstat p{margin:0;font-size:14px;line-height:1.5;color:var(--text)}
+.gstat b{color:var(--mint)}
+.gk{display:inline-block;margin-right:6px;font:600 11px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.gdots{display:flex;gap:5px}
+.gdots i{width:9px;height:9px;border:1px solid var(--pc);opacity:.45}
+.gdots i.on{background:var(--pc);opacity:1;box-shadow:0 0 8px var(--pc)}
+.ghow{margin:8px 0 12px;padding-left:20px;line-height:1.7}
+.gnew{margin:0 0 10px;font:600 11px var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mint)}
+.gwin{margin:0 0 18px;padding:14px 16px;border:1px solid var(--mint);background:rgba(87,255,176,.07)}
+.gwin b{font-size:18px;color:var(--cream)}
+.gwin .actions{display:flex;gap:10px;flex-wrap:wrap}
+@media (max-width:860px){body.in-game #panel{height:44%}}
