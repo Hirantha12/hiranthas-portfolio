@@ -4,6 +4,16 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import gsap from 'gsap';
 
+// Fonts are bundled with the site (same files Google Fonts serves), so they load from our own
+// domain instead of waiting on two extra Google connections.
+import '@fontsource/chakra-petch/400.css';
+import '@fontsource/chakra-petch/500.css';
+import '@fontsource/chakra-petch/600.css';
+import '@fontsource/chakra-petch/700.css';
+import '@fontsource/jetbrains-mono/400.css';
+import '@fontsource/jetbrains-mono/500.css';
+import '@fontsource/jetbrains-mono/600.css';
+import '@fontsource/monoton/400.css';
 import './style.css';
 import { SECTIONS, PROJECTS, GLYPH } from './data/content.js';
 import { Snd } from './audio/sound.js';
@@ -337,9 +347,19 @@ function start() {
   }
 
   const startBtn = $('#startBtn');
-  startBtn.disabled = false;
-  stLoad.innerHTML = '<b>Ready.</b> 64 squares, 8 projects, 1 rainy night';
-  startBtn.focus({ preventScroll: true });
+  // Compile every shader before START, including pieces that only appear later, so the intro
+  // and the first visit to Projects don't stutter. compileAsync doesn't block the page.
+  function ready() {
+    startBtn.disabled = false;
+    stLoad.innerHTML = '<b>Ready.</b> 64 squares, 8 projects, 1 rainy night';
+    startBtn.focus({ preventScroll: true });
+  }
+  const hidden = projPieces.map((p) => p.holder); // still shrunk under the board, so nothing shows
+  hidden.forEach((o) => { o.visible = true; });
+  Promise.resolve(renderer.compileAsync(scene, camera)).catch(() => {}).finally(() => {
+    hidden.forEach((o) => { o.visible = false; });
+    ready();
+  });
   startBtn.addEventListener('click', () => {
     startBtn.disabled = true;
     Snd.init(); syncSnd();
