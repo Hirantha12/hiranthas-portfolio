@@ -20,6 +20,7 @@ if (import.meta.env.DEV) window.gsap = gsap; // handy for debugging in the conso
 const $ = (s) => document.querySelector(s);
 const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const TOUCH = matchMedia('(pointer: coarse)').matches;
+const DEBUG = new URLSearchParams(location.search).has('debug'); // ?debug shows FPS and draw calls
 const V3 = THREE.Vector3, UP = new V3(0, 1, 0);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const I = (v) => v * Math.PI; // light units, see world.js
@@ -351,9 +352,27 @@ function start() {
      ========================================================= */
   const off = new V3();
   let last = performance.now(), elapsed = 0, codeT = 0;
+
+  // ?debug: frame rate and draw calls per frame (bloom adds about a dozen of its own).
+  let stats = null, statFrames = 0, statTime = 0;
+  if (DEBUG) {
+    stats = document.createElement('div'); stats.id = 'dbg';
+    stats.style.cssText = 'position:fixed;top:8px;left:8px;z-index:99;padding:6px 9px;border-radius:6px;background:rgba(0,0,0,.75);color:#57ffb0;font:600 12px/1.4 ui-monospace,monospace;white-space:pre;pointer-events:none';
+    document.body.append(stats);
+    renderer.info.autoReset = false;
+  }
+  function updateStats(rawDt) {
+    statFrames++; statTime += rawDt;
+    if (statTime < 0.5) return;
+    const r = renderer.info.render;
+    stats.textContent = `${Math.round(statFrames / statTime)} fps\n${Math.round(r.calls / statFrames)} draw calls\n${Math.round(r.triangles / statFrames / 1000)}k triangles\nDPR ${renderer.getPixelRatio()}`;
+    statFrames = 0; statTime = 0; renderer.info.reset();
+  }
+
   function frame(now) {
     requestAnimationFrame(frame);
-    const dt = Math.min((now - last) / 1000, 0.05); last = now; elapsed += dt;
+    const rawDt = (now - last) / 1000;
+    const dt = Math.min(rawDt, 0.05); last = now; elapsed += dt;
     W.updateRain(dt);
     for (const k in giants) { const g = giants[k]; g.label.position.y = g.ly + Math.sin(elapsed * 1.3 + g.phase) * 0.12; }
     if (signOn && !REDUCE && Math.random() < 0.004) { signMat.opacity = 0.35; setTimeout(() => { signMat.opacity = 1; }, 60 + Math.random() * 100); }
@@ -372,6 +391,7 @@ function start() {
     camera.position.set(cam.tx + off.x + par.x * pk, cam.ty + off.y + par.y * pk * 0.6, cam.tz + off.z);
     camera.lookAt(cam.tx, cam.ty, cam.tz);
     if (composer) composer.render(); else renderer.render(scene, camera);
+    if (stats) updateStats(rawDt);
   }
   camera.position.set(cam.px, cam.py, cam.pz); camera.lookAt(0, 0, -2);
   requestAnimationFrame(frame);
