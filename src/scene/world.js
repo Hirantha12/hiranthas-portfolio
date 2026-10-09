@@ -56,12 +56,17 @@ export function buildWorld(scene, { touch, reduce }) {
     }
     x.globalAlpha = 1;
     const mat = new THREE.MeshBasicMaterial({ map: tex(c), color: 0x8a7cc0 });
+    // One instanced mesh draws all 28 buildings in a single call. A unit box scaled per building
+    // has the same UVs as a box built at that size, so the window texture looks the same.
+    const city = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mat, 28);
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), yAxis = new V3(0, 1, 0);
     for (let i = 0; i < 28; i++) {
       const a = (i / 28) * Math.PI * 2 + (Math.random() - 0.5) * 0.1, R = 54 + Math.random() * 10;
       const h = 12 + Math.random() * 22, w = 4 + Math.random() * 5;
-      const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), mat);
-      b.position.set(Math.cos(a) * R, h / 2, -Math.sin(a) * R); b.rotation.y = Math.random(); scene.add(b);
+      q.setFromAxisAngle(yAxis, Math.random());
+      city.setMatrixAt(i, m4.compose(new V3(Math.cos(a) * R, h / 2, -Math.sin(a) * R), q, new V3(w, h, w)));
     }
+    city.computeBoundingSphere(); scene.add(city);
   }
 
   /* ---------- label sprites over the giant pieces ---------- */
@@ -213,12 +218,15 @@ export function buildWorld(scene, { touch, reduce }) {
     const pts = [], n = 15, cols = [0xff3d9a, 0xffb547, 0x3ef2ff, 0x57ffb0, 0xa77bff];
     for (let i = 0; i <= 40; i++) { const t = i / 40; pts.push(new V3(-4.1 + 8.2 * t, 3.3 - Math.sin(t * Math.PI) * 0.45, -1.98)); }
     scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x2a2238 })));
-    const bulb = new THREE.SphereGeometry(0.07, 12, 10);
+    // All bulbs in one instanced draw; each instance keeps its own colour.
+    const bulbs = new THREE.InstancedMesh(new THREE.SphereGeometry(0.07, 12, 10), new THREE.MeshBasicMaterial({ color: 0xffffff }), n);
+    const m4 = new THREE.Matrix4(), col = new THREE.Color();
     for (let i = 0; i < n; i++) {
       const t = (i + 0.5) / n;
-      const m = new THREE.Mesh(bulb, new THREE.MeshBasicMaterial({ color: cols[i % 5] }));
-      m.position.set(-4.1 + 8.2 * t, 3.22 - Math.sin(t * Math.PI) * 0.45, -1.98); scene.add(m);
+      bulbs.setMatrixAt(i, m4.makeTranslation(-4.1 + 8.2 * t, 3.22 - Math.sin(t * Math.PI) * 0.45, -1.98));
+      bulbs.setColorAt(i, col.setHex(cols[i % 5]));
     }
+    bulbs.computeBoundingSphere(); scene.add(bulbs);
   }
   // street lamps
   [[-13, 1.5], [13, 1.5]].forEach(([x, z]) => {
@@ -341,42 +349,76 @@ export function buildWorld(scene, { touch, reduce }) {
   })();
 
   /* ---------- rain + ripples ---------- */
-  const RAIN = touch ? 1300 : reduce ? 1000 : 2600, LEN = 0.45, WIND = 0.12;
-  const rx = new Float32Array(RAIN), ry = new Float32Array(RAIN), rz = new Float32Array(RAIN), rs = new Float32Array(RAIN);
-  const rainPos = new Float32Array(RAIN * 6);
-  const seed = (i) => { rx[i] = (Math.random() - 0.5) * 46; rz[i] = -22 + Math.random() * 40; };
-  for (let i = 0; i < RAIN; i++) { seed(i); ry[i] = Math.random() * 20; rs[i] = 15 + Math.random() * 8; }
-  const rainGeo = new THREE.BufferGeometry(); rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
-  const rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({ color: 0xa9b8ff, transparent: true, opacity: 0.3 }));
+  // The GPU moves the rain: each drop falls from its start height at its own speed, wraps every
+  // 20 units, and picks a fresh random x/z on each wrap (hashed from the drop's seed and wrap count).
+  // Same drops, speeds, wind and streak length as moving them on the CPU, without the per-frame upload.
+  const RAIN = touch ? 1300 : reduce ? 1000 : 2600, LEN = 0.45, WIND = 0.12, AVG_SPEED = 19;
+  const rainGeo = new THREE.BufferGeometry();
+  const ends = new Float32Array(RAIN * 6), drop = new Float32Array(RAIN * 6);
+  for (let i = 0; i < RAIN; i++) {
+    const y0 = Math.random() * 20, speed = 15 + Math.random() * 8, sd = Math.random() * 1000;
+    ends[i * 6 + 1] = 1; // vertex 0 is the top of the streak, vertex 1 the bottom
+    drop.set([y0, speed, sd, y0, speed, sd], i * 6);
+  }
+  rainGeo.setAttribute('position', new THREE.BufferAttribute(ends, 3));
+  rainGeo.setAttribute('aDrop', new THREE.BufferAttribute(drop, 3));
+  const rainMat = new THREE.LineBasicMaterial({ color: 0xa9b8ff, transparent: true, opacity: 0.3 });
+  const rainTime = { value: 0 };
+  rainMat.onBeforeCompile = (s) => {
+    s.uniforms.uTime = rainTime;
+    s.vertexShader = s.vertexShader
+      .replace('void main() {', `attribute vec3 aDrop;
+uniform float uTime;
+vec2 hash22(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * vec3(.1031, .1030, .0973)); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.xx + p3.yz) * p3.zy); }
+void main() {`)
+      .replace('#include <begin_vertex>', `float yy = aDrop.x - aDrop.y * uTime;
+float wrap = floor(yy / 20.0);
+vec2 h = hash22(vec2(aDrop.z, wrap));
+vec3 transformed = vec3((h.x - 0.5) * 46.0 + position.y * ${WIND.toFixed(2)}, yy - wrap * 20.0 + position.y * ${LEN.toFixed(2)}, -22.0 + h.y * 40.0);`);
+  };
+  const rain = new THREE.LineSegments(rainGeo, rainMat);
   rain.frustumCulled = false; scene.add(rain);
+
+  // Ripples: one instanced mesh with a per-ring opacity, instead of 40 separate meshes.
+  const RIPPLES = 40;
+  const rippleMat = new THREE.MeshBasicMaterial({ color: 0xb7c4ff, transparent: true, depthWrite: false });
+  rippleMat.onBeforeCompile = (s) => {
+    s.vertexShader = s.vertexShader.replace('void main() {', 'attribute float aAlpha;\nvarying float vAlpha;\nvoid main() {').replace('#include <begin_vertex>', '#include <begin_vertex>\nvAlpha = aAlpha;');
+    s.fragmentShader = s.fragmentShader.replace('void main() {', 'varying float vAlpha;\nvoid main() {').replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.a *= vAlpha;');
+  };
   const ringGeo = new THREE.RingGeometry(0.05, 0.075, 24);
-  const ripples = Array.from({ length: 40 }, () => {
-    const m = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0xb7c4ff, transparent: true, opacity: 0, depthWrite: false }));
-    m.rotation.x = -Math.PI / 2; m.visible = false; scene.add(m); return { m, life: -1 };
-  });
+  const rippleAlpha = new THREE.InstancedBufferAttribute(new Float32Array(RIPPLES), 1);
+  ringGeo.setAttribute('aAlpha', rippleAlpha);
+  const rippleMesh = new THREE.InstancedMesh(ringGeo, rippleMat, RIPPLES);
+  rippleMesh.frustumCulled = false; scene.add(rippleMesh);
+  const ripples = Array.from({ length: RIPPLES }, () => ({ life: -1, x: 0, z: 0 }));
+  const flat = new THREE.Quaternion().setFromAxisAngle(new V3(1, 0, 0), -Math.PI / 2);
+  const m4 = new THREE.Matrix4(), rp = new V3(), rsc = new V3();
+  for (let i = 0; i < RIPPLES; i++) rippleMesh.setMatrixAt(i, m4.makeScale(0, 0, 0));
   function ripple(x, z) {
-    if (Math.random() > 0.05 || Math.abs(x) > 15 || z < -11 || z > 13) return;
+    if (Math.abs(x) > 15 || z < -11 || z > 13) return;
     if (Math.abs(x) < 2.7 && Math.abs(z - 0.2) < 2.7) return;
     if (Math.abs(x) < 3.9 && z < -2.4 && z > -6.5) return;
     if (Math.abs(x - 6.6) < 2 && Math.abs(z - 7.2) < 2.4) return;
     const r = ripples.find((r) => r.life < 0); if (!r) return;
-    r.life = 0; r.m.position.set(x, 0.025, z); r.m.visible = true;
+    r.life = 0; r.x = x; r.z = z;
   }
+  // About 5% of landing drops leave a ripple, as before. Landings are spread over the same area.
+  let rippleDebt = 0;
   function updateRain(dt) {
-    for (let i = 0; i < RAIN; i++) {
-      ry[i] -= rs[i] * dt;
-      if (ry[i] < 0) { ripple(rx[i], rz[i]); ry[i] += 20; seed(i); }
-      const k = i * 6;
-      rainPos[k] = rx[i] + WIND; rainPos[k + 1] = ry[i] + LEN; rainPos[k + 2] = rz[i];
-      rainPos[k + 3] = rx[i]; rainPos[k + 4] = ry[i]; rainPos[k + 5] = rz[i];
-    }
-    rainGeo.attributes.position.needsUpdate = true;
-    for (const r of ripples) {
-      if (r.life < 0) continue;
+    rainTime.value += dt;
+    if (rainTime.value > 2000) rainTime.value -= 2000; // keeps the shader maths precise
+    rippleDebt += RAIN * (AVG_SPEED / 20) * 0.05 * dt;
+    for (; rippleDebt >= 1; rippleDebt--) ripple((Math.random() - 0.5) * 46, -22 + Math.random() * 40);
+    ripples.forEach((r, i) => {
+      if (r.life < 0) return;
       r.life += dt / 0.6;
-      if (r.life >= 1) { r.life = -1; r.m.visible = false; continue; }
-      const s = 1 + r.life * 6; r.m.scale.set(s, s, 1); r.m.material.opacity = 0.5 * (1 - r.life);
-    }
+      if (r.life >= 1) { r.life = -1; rippleAlpha.array[i] = 0; rippleMesh.setMatrixAt(i, m4.makeScale(0, 0, 0)); return; }
+      const s = 1 + r.life * 6;
+      rippleMesh.setMatrixAt(i, m4.compose(rp.set(r.x, 0.025, r.z), flat, rsc.set(s, s, 1)));
+      rippleAlpha.array[i] = 0.5 * (1 - r.life);
+    });
+    rippleMesh.instanceMatrix.needsUpdate = true; rippleAlpha.needsUpdate = true;
   }
 
   return { giants, giantMeshes, board, sqPos, decor, projPieces, projMeshes, hl, sheet, sheetMeshes, signMat, signLight, flash, drawCode, updateRain, PIECE_SCALE: 0.62 };

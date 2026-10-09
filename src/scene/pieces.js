@@ -1,6 +1,7 @@
 // Procedural chess pieces: LatheGeometry profiles, plus an extruded head for the knight.
 // Later you can swap these for Blender models loaded with GLTFLoader.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // Height of each piece at scale 1 (used to place labels and frame the camera).
 export const HEIGHT = { king: 1.06, queen: 0.98, bishop: 0.92, rook: 0.8, pawn: 0.74, knight: 0.9 };
@@ -17,13 +18,14 @@ const PROFILES = {
 
 const templates = {};
 
+// Each piece is built from several parts (a queen has 10), then merged into one geometry
+// so the GPU draws it in a single call. The shape is identical to drawing the parts separately.
 function buildTemplate(type) {
-  const g = new THREE.Group();
+  const parts = [];
   const add = (geo, x = 0, y = 0, z = 0, ry = 0) => {
-    const m = new THREE.Mesh(geo);
-    m.position.set(x, y, z); m.rotation.y = ry;
-    m.castShadow = true; m.receiveShadow = true;
-    g.add(m); return m;
+    const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), ry), new THREE.Vector3(1, 1, 1));
+    const g = geo.index ? geo.toNonIndexed() : geo; // parts must all be non-indexed to merge
+    g.applyMatrix4(m); g.clearGroups(); parts.push(g);
   };
   add(new THREE.LatheGeometry(PROFILES[type].map(([r, y]) => new THREE.Vector2(r, y)), 40));
 
@@ -51,13 +53,14 @@ function buildTemplate(type) {
     geo.translate(-0.03, 0, -0.08);
     add(geo);
   }
-  return g;
+  return mergeGeometries(parts);
 }
 
 // Returns a new piece group that shares geometry with every other piece of the same type.
 export function makePiece(type, material) {
-  const t = templates[type] || (templates[type] = buildTemplate(type));
-  const p = t.clone(true);
-  p.traverse((o) => { if (o.isMesh) o.material = material; });
+  const geo = templates[type] || (templates[type] = buildTemplate(type));
+  const m = new THREE.Mesh(geo, material);
+  m.castShadow = true; m.receiveShadow = true;
+  const p = new THREE.Group(); p.add(m);
   return p;
 }

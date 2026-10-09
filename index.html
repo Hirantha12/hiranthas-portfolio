@@ -13,9 +13,6 @@
   <meta property="og:description" content="Full Stack Software Engineer. Press START and explore my projects on a 3D chessboard.">
   <meta property="og:image" content="/og.jpg">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Monoton&display=swap">
 </head>
 <body>
   <canvas id="c" aria-label="3D chess plaza. Use the menu at the bottom to open each section."></canvas>
@@ -100,6 +97,9 @@
 
   <script type="module" src="/src/main.js"></script>
   <script>
+    // Start downloading the fonts the 3D signs need now, while the main script is still loading.
+    if (document.fonts) ['400 64px Monoton', '700 64px "Chakra Petch"', '600 26px "JetBrains Mono"', '400 15px "JetBrains Mono"']
+      .forEach(function (f) { document.fonts.load(f).catch(function () {}); });
     // Quick view works even before the 3D scene loads.
     (function () {
       var q = document.getElementById('quick');
