@@ -1,0 +1,14 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "ignorePaths": ["node_modules", "dist", "package-lock.json", "src/data/qa-vectors.json"],
+  "words": [
+    "Hirantha", "Hiranthas", "Rathnayaka", "hiranthaviraj", "Dehiwala", "Lavinia",
+    "Softvil", "Explorelogy", "Stalione", "Exploreture", "VivoAssist", "TuitionLanka", "Softmatter", "Watawala",
+    "Nareta", "Kefi", "Codezela", "Westnahira", "Kataka", "Invos", "ayubowan",
+    "Englund", "scoresheet", "gsap", "Tweens", "noopener", "maxlength", "Monoton", "Fontsource", "fontsource",
+    "playcard", "pitem", "gdots", "ghow", "gwin", "gstat", "gtop", "gnew", "gclock", "gpiece", "gboard",
+    "cmsg", "cmsgs", "cnote", "Sugg", "csugg", "cform", "cstat", "cfoot", "cpulse",
+    "ravi", "visemes", "Xenova", "MiniLM", "onnx", "onnxruntime", "swiftshader"
+  ]
+}
