@@ -21,6 +21,7 @@ import { setMaxAnisotropy } from './scene/canvas.js';
 import { buildWorld, P } from './scene/world.js';
 import { createGame } from './scene/game.js';
 import { createPanel } from './ui/panel.js';
+import { createChat } from './ui/chat.js';
 
 // Colour setup: this matches the look of the original r128 prototype (linear, no colour
 // conversion). When you move to baked Blender textures, switch to the modern pipeline:
@@ -139,13 +140,16 @@ function start() {
   function gameView() {
     const a = camera.aspect, tall = portrait();
     // tall: Hirantha at the top, the board, then the clock in front of it
-    const tgt = tall ? new V3(0, 1.65, 0.0) : new V3(0.45, 1.1, 0.5);
+    const tgt = tall ? new V3(0.5, 1.65, 0.0) : new V3(0.45, 1.4, 0.1);
     const free = isDesktop() ? (innerWidth - Math.min(460, innerWidth * 0.42) - 32) / innerWidth : 1;
-    const halfW = Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * a * free);
-    const dist = (tall ? 2.95 : 3.25) / Math.tan(halfW), el = THREE.MathUtils.degToRad(tall ? 52 : 34);
+    const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    const halfW = Math.atan(tanV * a * free);
+    // Back off far enough for the width (board + clock) and, on wide screens, the height too
+    // (from Hirantha's head down to the near edge of the board).
+    const dist = Math.max((tall ? 3.3 : 3.25) / Math.tan(halfW), tall ? 0 : 2.45 / tanV), el = THREE.MathUtils.degToRad(tall ? 52 : 34);
     return { pos: new V3(tgt.x, tgt.y + dist * Math.sin(el), tgt.z + dist * Math.cos(el)), tgt };
   }
-  const viewFor = (m) => (m === 'home' ? homeView() : m === 'projects' && game.active ? framed(gameView()) : framed(sectionView(m)));
+  const viewFor = (m) => (m === 'home' ? homeView() : m === 'talk' ? framed(talkView()) : m === 'projects' && game.active ? framed(gameView()) : framed(sectionView(m)));
   function flyTo(v, dur, ease) {
     gsap.to(cam, { px: v.pos.x, py: v.pos.y, pz: v.pos.z, tx: v.tgt.x, ty: v.tgt.y, tz: v.tgt.z, duration: REDUCE ? Math.min(dur, 0.8) : dur, ease: ease || 'power3.inOut', overwrite: true });
   }
@@ -155,7 +159,7 @@ function start() {
      ========================================================= */
   let mode = 'intro', activeProject = -1;
   const game = createGame({
-    scene, board: W.board, boardTop: W.boardTop, sqPos, ivory: W.ivoryS, ebony: W.ebonyS, reduce: REDUCE,
+    scene, camera, board: W.board, boardTop: W.boardTop, sqPos, ivory: W.ivoryS, ebony: W.ebonyS, reduce: REDUCE,
     onChange: (info) => panel.gameUpdate(info),
   });
   const panel = createPanel({
@@ -164,19 +168,26 @@ function start() {
       if (action === 'play' || action === 'replay') startGame();
       else if (action === 'exit') exitGame();
       else if (action === 'contact') goTo('contact');
+      else if (action === 'shake') game.shake();
     },
   });
 
-  // Cartoon Hirantha is only downloaded the first time someone plays, so the site's first load
-  // is unchanged. If it fails to load, the game still works without him.
-  let avatarLoading = false;
+  // Hirantha (4 KB) is downloaded after START, so he isn't on the critical path of the first load;
+  // he then sits in the kiosk coding until a game starts. If he fails to load, the game still works.
+  let avatarLoading = false, hirantha = null;
   function loadAvatar() {
     if (avatarLoading) return;
     avatarLoading = true;
     import('./scene/avatar.js')
-      .then(({ createAvatar }) => game.setAvatar(createAvatar({ scene, position: new V3(0, 0, -2.72) })))
+      .then(({ createAvatar }) => { hirantha = createAvatar({ scene, position: new V3(0, 0, -2.72) }); game.setAvatar(hirantha); })
       .catch(() => {});
   }
+
+  // "Ask Hirantha": click him in the kiosk to talk (see src/ui/chat.js and api/ask.js).
+  const chat = createChat({ panel, onTalk: (on) => hirantha && hirantha.talk(on) });
+  // Camera in front of the counter, looking at him at his laptop.
+  // (on tall phones it comes in closer, over the counter, so the chessboard isn't in the way)
+  const talkView = () => { const tgt = new V3(1.3, 2.0, -4.25); return { pos: tgt.clone().add(camera.aspect < 1 ? new V3(-0.3, 0.95, 3.1) : new V3(-0.7, 0.75, 5.4)), tgt }; };
 
   function startGame() {
     if (mode !== 'projects') return;
@@ -188,7 +199,7 @@ function start() {
         gsap.to(pp.holder.scale, { x: 0.001, y: 0.001, z: 0.001, duration: 0.35, delay: i * 0.03, overwrite: true, onComplete: () => { pp.holder.visible = false; } });
       });
     }
-    clearHover();
+    clearHover(); resetOrbit();
     panel.startGame(); // before game.enter(), which posts the first status line
     game.enter(portrait());
     document.body.classList.add('in-game');
@@ -199,6 +210,7 @@ function start() {
     game.exit();
     document.body.classList.remove('in-game');
     if (mode !== 'projects') return;
+    resetOrbit();
     boardToProjects();
     panel.refreshProjects();
     flyTo(framed(sectionView('projects')), 1.8);
@@ -255,12 +267,21 @@ function start() {
     dockBtns.forEach((b) => b.setAttribute('aria-current', b.dataset.go === mode ? 'true' : 'false'));
     document.body.classList.toggle('home', mode === 'home');
   }
+  // Drag to orbit, scroll or pinch to zoom: on the board and in Projects (including the game).
+  const canOrbit = () => mode === 'home' || mode === 'projects';
   function resetOrbit() { yawVel = 0; yawTarget = Math.round(yaw / (Math.PI * 2)) * Math.PI * 2; pitchTarget = 0; zoomTarget = 1; }
   function goTo(key) {
     if (mode === 'intro' || key === mode) return;
     const prev = mode; mode = key;
     Snd.tick(); resetOrbit(); clearHover(); updateDock();
     if (prev === 'projects') { if (game.active) { game.exit(); document.body.classList.remove('in-game'); } boardToDecor(); }
+    if (prev === 'talk') { chat.close(); if (hirantha) hirantha.chatMode(false); }
+    if (key === 'talk') {
+      flyTo(framed(talkView()), 1.8);
+      chat.open(); hirantha.chatMode(true);
+      history.replaceState(null, '', '#talk');
+      return;
+    }
     if (key === 'home') { panel.close(); flyTo(homeView(), 1.9); history.replaceState(null, '', location.pathname); return; }
     activeProject = -1;
     flyTo(framed(sectionView(key)), 2.1);
@@ -294,7 +315,7 @@ function start() {
   function pickAll() {
     if (mode === 'intro') return [];
     ray.setFromCamera(ndc, camera);
-    const list = mode === 'projects' ? (game.active ? game.pickList() : projMeshes) : mode === 'home' ? giantMeshes.concat(sheetMeshes) : giantMeshes;
+    const list = mode === 'projects' ? (game.active ? game.pickList() : projMeshes) : mode === 'home' ? giantMeshes.concat(sheetMeshes, hirantha ? hirantha.pickMeshes : []) : giantMeshes;
     return ray.intersectObjects(list, false);
   }
   function pick() { const hit = pickAll()[0]; return hit ? hit.object.userData : null; }
@@ -303,10 +324,11 @@ function start() {
   const clearHover = () => setHover(null);
 
   function setHover(h) {
-    const id = h ? (h.kind === 'section' ? 's:' + h.key : h.kind === 'sheet' ? 'sheet' : 'p:' + h.i) : null;
+    const id = h ? (h.kind === 'section' ? 's:' + h.key : h.kind === 'sheet' ? 'sheet' : h.kind === 'hirantha' ? 'h' : 'p:' + h.i) : null;
     if (id === hoverId) return;
     if (hoverId) {
       if (hoverId === 'sheet') gsap.to(sheet.tilt.position, { y: 0.95, duration: 0.3 });
+      else if (hoverId === 'h') { /* the avatar has no hover animation */ }
       else if (hoverId[0] === 's') {
         const g = giants[hoverId.slice(2)];
         gsap.to(g.mat, { emissiveIntensity: g.baseEI, duration: 0.3 });
@@ -320,7 +342,8 @@ function start() {
     canvas.style.cursor = id ? 'pointer' : mode === 'home' ? 'grab' : 'default';
     if (!id) { hideTip(); return; }
     Snd.tick();
-    if (h.kind === 'sheet') { gsap.to(sheet.tilt.position, { y: 1.1, duration: 0.3 }); showTip('♞ Scoresheet · read my story', '#ffb547'); }
+    if (h.kind === 'hirantha') showTip('💬 Hirantha · ask me anything', '#3ef2ff');
+    else if (h.kind === 'sheet') { gsap.to(sheet.tilt.position, { y: 1.1, duration: 0.3 }); showTip('♞ Scoresheet · read my story', '#ffb547'); }
     else if (h.kind === 'section') {
       const g = giants[h.key];
       gsap.to(g.mat, { emissiveIntensity: 0.5, duration: 0.3 });
@@ -341,7 +364,7 @@ function start() {
   canvas.addEventListener('pointermove', (e) => {
     if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pinching) {
-      if (pointers.size >= 2 && mode === 'home') zoomTarget = clamp(pinchZoom * (pinchDist / fingerGap()), 0.5, 1.45);
+      if (pointers.size >= 2 && canOrbit()) zoomTarget = clamp(pinchZoom * (pinchDist / fingerGap()), 0.5, 1.45);
       return;
     }
     setNdc(e); ptrMoved = true; mouse.x = ndc.x; mouse.y = ndc.y;
@@ -349,7 +372,7 @@ function start() {
     if (down) {
       const dx = e.clientX - lastX, dy = e.clientY - lastY; lastX = e.clientX; lastY = e.clientY;
       if (Math.abs(e.clientX - down.x) + Math.abs(e.clientY - down.y) > 7) { if (!dragging) hideTip(); dragging = true; }
-      if (dragging && mode === 'home') {
+      if (dragging && canOrbit()) {
         yawVel = -dx * 0.006; yawTarget += yawVel;
         pitchTarget = clamp(pitchTarget - dy * 0.004, -0.75, 0.5);
         canvas.style.cursor = 'grabbing';
@@ -366,17 +389,20 @@ function start() {
   function endPointer(e, cancelled) {
     pointers.delete(e.pointerId);
     if (pinching) { if (pointers.size === 0) pinching = false; return; }
+    // Double-tap on empty space resets the view, like double-click on desktop.
+    const doubleTap = () => {
+      if (e.pointerType !== 'touch' || !canOrbit()) return;
+      const now = performance.now();
+      if (now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40) { resetOrbit(); lastTap.t = 0; }
+      else lastTap = { t: now, x: e.clientX, y: e.clientY };
+    };
     if (down && !dragging && !cancelled && game.active && mode === 'projects') {
-      setNdc(e); game.tap(pickAll());
+      setNdc(e); const hits = pickAll();
+      if (hits.length) game.tap(hits); else doubleTap();
     } else if (down && !dragging && !cancelled) {
       setNdc(e); const h = pick();
-      if (h) { if (h.kind === 'section') goTo(h.key); else if (h.kind === 'sheet') goTo('about'); else selectProject(h.i); }
-      else if (e.pointerType === 'touch' && mode === 'home') {
-        // Double-tap on empty space resets the view, like double-click on desktop.
-        const now = performance.now();
-        if (now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40) { resetOrbit(); lastTap.t = 0; }
-        else lastTap = { t: now, x: e.clientX, y: e.clientY };
-      }
+      if (h) { if (h.kind === 'hirantha') goTo('talk'); else if (h.kind === 'section') goTo(h.key); else if (h.kind === 'sheet') goTo('about'); else selectProject(h.i); }
+      else doubleTap();
     }
     down = null; dragging = false;
     if (mode === 'home' && !hoverId) canvas.style.cursor = 'grab';
@@ -384,11 +410,11 @@ function start() {
   canvas.addEventListener('pointerup', (e) => endPointer(e, false));
   canvas.addEventListener('pointercancel', (e) => endPointer(e, true));
   canvas.addEventListener('wheel', (e) => {
-    if (mode !== 'home') return;
+    if (!canOrbit()) return;
     e.preventDefault();
     zoomTarget = clamp(zoomTarget * (1 + clamp(e.deltaY, -100, 100) * 0.0012), 0.5, 1.45);
   }, { passive: false });
-  canvas.addEventListener('dblclick', () => { if (mode === 'home') resetOrbit(); });
+  canvas.addEventListener('dblclick', () => { if (canOrbit()) resetOrbit(); });
   canvas.addEventListener('pointerleave', () => { ndc.set(9, 9); ptrMoved = true; mouse.x = mouse.y = 0; });
 
   /* =========================================================
@@ -453,6 +479,7 @@ function start() {
     Snd.init(); syncSnd();
     gsap.to('#start', { opacity: 0, duration: 0.9, ease: 'power2.out', onComplete: () => { $('#start').hidden = true; } });
     runIntro(location.hash.slice(1));
+    loadAvatar();
   }, { once: true });
 
   /* =========================================================
@@ -492,9 +519,9 @@ function start() {
       else setHover(pick());
     }
     game.update(dt);
-    W.stringLights.visible = !game.active; // from the visitor's seat they'd hang right over his face
+    W.stringLights.visible = !game.active && mode !== 'talk'; // from the visitor's seat they'd hang right over his face
 
-    if (!down && mode === 'home' && Math.abs(yawVel) > 0.0002) { yawTarget += yawVel; yawVel *= Math.pow(0.93, dt * 60); }
+    if (!down && canOrbit() && Math.abs(yawVel) > 0.0002) { yawTarget += yawVel; yawVel *= Math.pow(0.93, dt * 60); }
     const lerp = Math.min(1, dt * 6);
     yaw += (yawTarget - yaw) * lerp; pitch += (pitchTarget - pitch) * lerp; zoom += (zoomTarget - zoom) * Math.min(1, dt * 5);
     const s = Math.min(1, dt * 2.5);

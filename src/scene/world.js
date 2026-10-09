@@ -134,15 +134,27 @@ export function buildWorld(scene, { touch, reduce }) {
   });
 
   /* ---------- animated code screen + laptop ---------- */
-  const [codeC, codeX] = cnv(512, 300);
+  // Drawn at double resolution on desktop so the code on the wall monitor reads clearly.
+  const CODE_RES = touch ? 1 : 2;
+  const [codeC, codeX] = cnv(512 * CODE_RES, 300 * CODE_RES);
+  codeX.scale(CODE_RES, CODE_RES);
   const codeTex = tex(codeC);
   box(2.04, 1.22, 0.08, new THREE.MeshStandardMaterial({ color: 0x0b0812, roughness: 0.4 }), 1.5, 2.75, -6.06);
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.11), new THREE.MeshBasicMaterial({ map: codeTex }));
   screen.position.set(1.5, 2.75, -6.01); scene.add(screen);
-  const lap = new THREE.Group(); lap.position.set(-1.7, 1.42, -3.3); lap.rotation.y = 0.35; scene.add(lap);
+  // Hirantha's laptop on the counter, facing his seat inside the kiosk (he codes here between
+  // games). It shows the same live code as the big monitor behind him.
+  const lap = new THREE.Group(); lap.position.set(1.3, 1.42, -3.35); lap.rotation.y = Math.PI; scene.add(lap);
   box(0.72, 0.03, 0.5, new THREE.MeshStandardMaterial({ color: 0x3a3550, metalness: 0.5, roughness: 0.35 }), 0, 0, 0, lap);
   const lid = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.42), new THREE.MeshBasicMaterial({ map: codeTex }));
   lid.position.set(0, 0.22, -0.24); lid.rotation.x = -0.18; lap.add(lid);
+  {
+    // back of the lid, which is what visitors see: dark shell with a small glowing knight
+    const [c, x] = cnv(128, 80); x.fillStyle = '#26213a'; x.fillRect(0, 0, 128, 80);
+    x.font = '44px serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; neon(x, '♞', 64, 42, '#3ef2ff', 12);
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.44), new THREE.MeshBasicMaterial({ map: tex(c) }));
+    back.position.set(0, 0.22, -0.248); back.rotation.set(-0.18, Math.PI, 0); lap.add(back);
+  }
 
   const CODE_LEN = CODE_LINES.join('\n').length;
   const KW = /(\b(?:import|from|export|async|function|const|await|return)\b|'[^']*'?)/g;

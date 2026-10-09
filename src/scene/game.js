@@ -10,11 +10,11 @@ import { Snd } from '../audio/sound.js';
 
 const BACK = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook'];
 const FILES = 'abcdefgh';
-const START_TIME = 5 * 60; // 5-minute blitz on both sides
+const START_TIME = 10 * 60; // 10 minutes each: the visitor's clock also runs while they read a project
 const SCALE = 0.5;
 const fmt = (t) => { const s = Math.max(0, Math.ceil(t)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
-export function createGame({ scene, board, boardTop, sqPos, ivory, ebony, reduce, onChange }) {
+export function createGame({ scene, camera, board, boardTop, sqPos, ivory, ebony, reduce, onChange }) {
   // The visitor sits on the open plaza side, so the board turns 180° for the game:
   // Black's pieces start nearest them and Hirantha plays White from the kiosk side.
   const at = (sq) => sqPos(7 - FILES.indexOf(sq[0]), 8 - +sq[1]);
@@ -39,17 +39,20 @@ export function createGame({ scene, board, boardTop, sqPos, ivory, ebony, reduce
     }
   }
 
-  /* ---------- chess clock on a small stand at the visitor's right ---------- */
+  /* ---------- chess clock on a small stand beside the board ---------- */
   const clock = new THREE.Group();
   clock.visible = false; scene.add(clock);
   const clockMeshes = [];
   const clockBody = new THREE.Group();
-  // Wide screens: beside the board. Tall phones: in front of it on the right, so the board can
-  // use the full screen width.
-  function layout(portrait) {
-    if (portrait) clock.position.set(1.35, 0, 3.3); else clock.position.set(2.95, 0, 1.1);
-    clockBody.rotation.y = Math.atan2(SEAT.x - clock.position.x, SEAT.z - clock.position.z); // face the visitor
+  // As in a real game it sits level with the middle of the board (on the visitor's right), so
+  // both players reach it equally; the face is turned towards the visitor so they can read it.
+  function layout() {
+    clock.position.set(2.92, 0, 0.2);
+    clockBody.rotation.y = Math.atan2(SEAT.x - clock.position.x, SEAT.z - clock.position.z);
   }
+  // A bouncing arrow above the visitor's button whenever it is their turn to press it.
+  const pointer = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.2, 16), new THREE.MeshBasicMaterial({ color: 0x57ffb0 }));
+  pointer.rotation.x = Math.PI; pointer.position.set(0.25, 0.62, 0); pointer.visible = false; clockBody.add(pointer);
   const [faceC, faceX] = cnv(512, 144);
   const faceTex = tex(faceC);
   const btnMat = (c) => new THREE.MeshStandardMaterial({ color: 0xd9cbb0, roughness: 0.4, emissive: new THREE.Color(c), emissiveIntensity: 0 });
@@ -140,6 +143,7 @@ export function createGame({ scene, board, boardTop, sqPos, ivory, ebony, reduce
     gen++;
     layout(portrait);
     if (avatar) avatar.show();
+    vHand.visible = false; meet.position.y = MEET_Y;
     timers.forEach(clearTimeout); timers.length = 0;
     pieces.clear(); hideArrow(); selected = null; k = 0;
     all.forEach((p, i) => {
@@ -164,6 +168,7 @@ export function createGame({ scene, board, boardTop, sqPos, ivory, ebony, reduce
     if (state === 'off') return;
     state = 'off'; running = null; gen++;
     if (avatar) avatar.hide();
+    vHand.visible = false; pointer.visible = false;
     timers.forEach(clearTimeout); timers.length = 0;
     hideArrow();
     all.forEach((p, i) => {
@@ -204,20 +209,60 @@ export function createGame({ scene, board, boardTop, sqPos, ivory, ebony, reduce
   }
 
   function blackMove() {
-    const [from, to] = GAME[k].black;
+    const [from, to, san] = GAME[k].black, g = gen;
+    const sharp = pieces.has(to) || san.includes('+'); // a capture or a check surprises him
     hideArrow(); selected = null; state = 'busy'; // the move animation lifts it from wherever it is
     movePiece(from, to, () => {
       if (k === GAME.length - 1) { // checkmate: Hirantha's king tips over
         state = 'mate'; running = null; drawClock();
         const king = pieces.get('e1');
         gsap.to(king.g.rotation, { z: -1.45, duration: 0.9 * D, delay: 0.4 * D, ease: 'bounce.out', onStart: () => Snd.clack(0.6, 0.8) });
-        if (avatar) avatar.lose();
         onChange({ phase: 'mate', k });
+        // Sad, then a good sport about it: he offers a handshake across the board.
+        if (avatar) avatar.lose(() => { if (g !== gen) return; avatar.offerHand(meet); state = 'handshake'; onChange({ phase: 'handshake' }); });
         return;
       }
+      if (avatar) avatar.react(sharp ? 'surprised' : 'nod');
       state = 'press';
       onChange({ phase: 'press', k });
     });
+  }
+
+  /* ---------- the handshake after checkmate ---------- */
+  // His hand and the visitor's both follow `meet`, a point above the middle of the board, so
+  // moving it up and down shakes both hands together.
+  const meet = new THREE.Object3D(); meet.position.set(0.05, 1.85, 0.35); scene.add(meet);
+  const MEET_Y = meet.position.y;
+  // The visitor's hand is a glowing neon "hologram", reaching in from the bottom right of the screen.
+  const holo = new THREE.MeshBasicMaterial({ color: 0x57ffb0, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
+  const vHand = new THREE.Group(); vHand.visible = false; scene.add(vHand);
+  const vPalm = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 12), holo); vPalm.scale.set(0.75, 0.5, 1.35);
+  const vThumb = new THREE.Mesh(new THREE.SphereGeometry(0.024, 10, 8), holo); vThumb.scale.set(1, 1.9, 1); vThumb.position.set(-0.05, 0.05, -0.02);
+  vPalm.add(vThumb);
+  const vArm = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.065, 1, 14), holo);
+  vHand.add(vPalm, vArm);
+  const reach = { t: 0 };
+  const anchor = new THREE.Vector3(), handAt = new THREE.Vector3(), d3 = new THREE.Vector3();
+  function placeVisitorHand() {
+    // shoulder point just below and right of the camera, so the arm comes from the visitor's side
+    anchor.set(0.9, -0.85, -1.2).applyMatrix4(camera.matrixWorld);
+    handAt.copy(meet.position).add(d3.set(0, 0, 0.07));
+    vPalm.position.lerpVectors(anchor, handAt, reach.t);
+    vPalm.lookAt(meet.position);
+    d3.subVectors(vPalm.position, anchor); const len = Math.max(d3.length(), 0.001);
+    vArm.position.copy(anchor).addScaledVector(d3, 0.5); vArm.scale.set(1, len, 1);
+    vArm.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d3.normalize());
+  }
+  function shake() {
+    if (state !== 'handshake') return;
+    state = 'shaking';
+    const g = gen;
+    reach.t = 0; vHand.visible = true; meet.position.y = MEET_Y;
+    gsap.timeline({ onComplete: () => { if (g === gen) vHand.visible = false; } })
+      .to(reach, { t: 1, duration: 0.6 * D, ease: 'power2.out' })
+      .to(meet.position, { y: MEET_Y + 0.07, duration: 0.16, yoyo: true, repeat: 5, ease: 'sine.inOut', onRepeat: () => Snd.tick() })
+      .add(() => { if (g !== gen) return; if (avatar) avatar.releaseHand(); state = 'done'; onChange({ phase: 'gg' }); })
+      .to(reach, { t: 0, duration: 0.5, ease: 'power2.in' }, '+=0.3');
   }
 
   function select(p) {
@@ -272,16 +317,21 @@ export function createGame({ scene, board, boardTop, sqPos, ivory, ebony, reduce
     drawClock();
     pulse += dt;
     const glow = 0.45 + 0.45 * Math.sin(pulse * 5);
-    blackBtn.material.emissiveIntensity = state === 'start' || state === 'press' ? glow : 0;
+    const yourPress = state === 'start' || state === 'press';
+    blackBtn.material.emissiveIntensity = yourPress ? glow : 0;
+    pointer.visible = yourPress;
+    if (yourPress) pointer.position.y = 0.6 + Math.abs(Math.sin(pulse * 4)) * 0.12;
     if (arrow) arrowMat.opacity = 0.6 + 0.3 * Math.sin(pulse * 4);
+    if (vHand.visible) placeVisitorHand();
   }
 
   const pickList = () => all.filter((p) => p.g.visible).map((p) => p.mesh).concat(boardTop, clockMeshes);
 
   return {
-    enter, exit, tap, update, pickList, layout,
+    enter, exit, tap, update, pickList, layout, shake,
     // The avatar arrives with a lazy import(); if a game is already running he sits down at once.
-    setAvatar(a) { avatar = a; if (state !== 'off') { a.show(); if (state === 'move') a.watchVisitor(); } },
+    // Outside a game he sits in the kiosk coding.
+    setAvatar(a) { avatar = a; if (state !== 'off') { a.show(); if (state === 'move') a.watchVisitor(); } else a.sitDown(); },
     clockPosition: () => clock.position.clone().setY(1.25),
     get active() { return state !== 'off'; },
   };
