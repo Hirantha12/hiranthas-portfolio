@@ -492,7 +492,7 @@ function start() {
       else setHover(pick());
     }
     game.update(dt);
-    W.stringLights.visible = !(game.active && portrait()); // they'd hang over his face from a phone's angle
+    W.stringLights.visible = !game.active; // from the visitor's seat they'd hang right over his face
 
     if (!down && mode === 'home' && Math.abs(yawVel) > 0.0002) { yawTarget += yawVel; yawVel *= Math.pow(0.93, dt * 60); }
     const lerp = Math.min(1, dt * 6);
