@@ -83,6 +83,7 @@ function start() {
      CAMERA + VIEWS
      ========================================================= */
   const cam = { px: 0, py: 28, pz: 46, tx: 0, ty: 0, tz: -2 };
+  if (import.meta.env.DEV) window.__dbg.cam = cam;
   let yaw = 0, yawTarget = 0, yawVel = 0, pitch = 0, pitchTarget = 0, zoom = 1, zoomTarget = 1;
   const sph = new THREE.Spherical();
   const par = { x: 0, y: 0 }, mouse = { x: 0, y: 0 };
@@ -137,10 +138,11 @@ function start() {
   const portrait = () => camera.aspect < 1;
   function gameView() {
     const a = camera.aspect, tall = portrait();
-    const tgt = tall ? new V3(0, 1.1, 1.0) : new V3(0.45, 1.1, 0.5); // tall: board plus the clock in front
+    // tall: Hirantha at the top, the board, then the clock in front of it
+    const tgt = tall ? new V3(0, 1.65, 0.0) : new V3(0.45, 1.1, 0.5);
     const free = isDesktop() ? (innerWidth - Math.min(460, innerWidth * 0.42) - 32) / innerWidth : 1;
     const halfW = Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * a * free);
-    const dist = (tall ? 2.55 : 3.25) / Math.tan(halfW), el = THREE.MathUtils.degToRad(tall ? 62 : 34);
+    const dist = (tall ? 2.95 : 3.25) / Math.tan(halfW), el = THREE.MathUtils.degToRad(tall ? 52 : 34);
     return { pos: new V3(tgt.x, tgt.y + dist * Math.sin(el), tgt.z + dist * Math.cos(el)), tgt };
   }
   const viewFor = (m) => (m === 'home' ? homeView() : m === 'projects' && game.active ? framed(gameView()) : framed(sectionView(m)));
@@ -165,8 +167,20 @@ function start() {
     },
   });
 
+  // Cartoon Hirantha is only downloaded the first time someone plays, so the site's first load
+  // is unchanged. If it fails to load, the game still works without him.
+  let avatarLoading = false;
+  function loadAvatar() {
+    if (avatarLoading) return;
+    avatarLoading = true;
+    import('./scene/avatar.js')
+      .then(({ createAvatar }) => game.setAvatar(createAvatar({ scene, position: new V3(0, 0, -2.72) })))
+      .catch(() => {});
+  }
+
   function startGame() {
     if (mode !== 'projects') return;
+    loadAvatar();
     if (!game.active) { // swap the eight project pieces for a full set
       setActive(-1);
       projPieces.forEach((pp, i) => {
@@ -277,13 +291,13 @@ function start() {
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(9, 9), tip = $('#tip');
   let ptrMoved = false, down = null, dragging = false, lastX = 0, lastY = 0, hoverId = null;
 
-  function pickHit() {
-    if (mode === 'intro') return null;
+  function pickAll() {
+    if (mode === 'intro') return [];
     ray.setFromCamera(ndc, camera);
     const list = mode === 'projects' ? (game.active ? game.pickList() : projMeshes) : mode === 'home' ? giantMeshes.concat(sheetMeshes) : giantMeshes;
-    return ray.intersectObjects(list, false)[0] || null;
+    return ray.intersectObjects(list, false);
   }
-  function pick() { const hit = pickHit(); return hit ? hit.object.userData : null; }
+  function pick() { const hit = pickAll()[0]; return hit ? hit.object.userData : null; }
   const showTip = (text, color) => { tip.textContent = text; tip.style.setProperty('--c', color); tip.classList.add('on'); };
   const hideTip = () => tip.classList.remove('on');
   const clearHover = () => setHover(null);
@@ -353,8 +367,7 @@ function start() {
     pointers.delete(e.pointerId);
     if (pinching) { if (pointers.size === 0) pinching = false; return; }
     if (down && !dragging && !cancelled && game.active && mode === 'projects') {
-      setNdc(e); const hit = pickHit();
-      if (hit) game.tap(hit.object.userData, hit.point);
+      setNdc(e); game.tap(pickAll());
     } else if (down && !dragging && !cancelled) {
       setNdc(e); const h = pick();
       if (h) { if (h.kind === 'section') goTo(h.key); else if (h.kind === 'sheet') goTo('about'); else selectProject(h.i); }
@@ -479,6 +492,7 @@ function start() {
       else setHover(pick());
     }
     game.update(dt);
+    W.stringLights.visible = !(game.active && portrait()); // they'd hang over his face from a phone's angle
 
     if (!down && mode === 'home' && Math.abs(yawVel) > 0.0002) { yawTarget += yawVel; yawVel *= Math.pow(0.93, dt * 60); }
     const lerp = Math.min(1, dt * 6);
