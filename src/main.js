@@ -19,6 +19,7 @@ import { SECTIONS, PROJECTS, GLYPH } from './data/content.js';
 import { Snd } from './audio/sound.js';
 import { setMaxAnisotropy } from './scene/canvas.js';
 import { buildWorld, P } from './scene/world.js';
+import { createGame } from './scene/game.js';
 import { createPanel } from './ui/panel.js';
 
 // Colour setup: this matches the look of the original r128 prototype (linear, no colour
@@ -130,7 +131,19 @@ function start() {
     else off.addScaledVector(up, -0.5 * halfH);
     return { pos: pos.add(off), tgt: tgt.add(off) };
   }
-  const viewFor = (m) => (m === 'home' ? homeView() : framed(sectionView(m)));
+  // "Play for them": the visitor sits on the plaza side as Black, facing Hirantha and his kiosk.
+  // The camera backs off just enough for the board and the clock (on the right) to fit the part
+  // of the screen the panel leaves free; tall phones look down more steeply.
+  const portrait = () => camera.aspect < 1;
+  function gameView() {
+    const a = camera.aspect, tall = portrait();
+    const tgt = tall ? new V3(0, 1.1, 1.0) : new V3(0.45, 1.1, 0.5); // tall: board plus the clock in front
+    const free = isDesktop() ? (innerWidth - Math.min(460, innerWidth * 0.42) - 32) / innerWidth : 1;
+    const halfW = Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * a * free);
+    const dist = (tall ? 2.55 : 3.25) / Math.tan(halfW), el = THREE.MathUtils.degToRad(tall ? 62 : 34);
+    return { pos: new V3(tgt.x, tgt.y + dist * Math.sin(el), tgt.z + dist * Math.cos(el)), tgt };
+  }
+  const viewFor = (m) => (m === 'home' ? homeView() : m === 'projects' && game.active ? framed(gameView()) : framed(sectionView(m)));
   function flyTo(v, dur, ease) {
     gsap.to(cam, { px: v.pos.x, py: v.pos.y, pz: v.pos.z, tx: v.tgt.x, ty: v.tgt.y, tz: v.tgt.z, duration: REDUCE ? Math.min(dur, 0.8) : dur, ease: ease || 'power3.inOut', overwrite: true });
   }
@@ -139,7 +152,43 @@ function start() {
      PANEL + PROJECT BOARD
      ========================================================= */
   let mode = 'intro', activeProject = -1;
-  const panel = createPanel({ onSelectProject: (i) => selectProject(i), getActiveProject: () => activeProject });
+  const game = createGame({
+    scene, board: W.board, boardTop: W.boardTop, sqPos, ivory: W.ivoryS, ebony: W.ebonyS, reduce: REDUCE,
+    onChange: (info) => panel.gameUpdate(info),
+  });
+  const panel = createPanel({
+    onSelectProject: (i) => selectProject(i), getActiveProject: () => activeProject,
+    onGame: (action) => {
+      if (action === 'play' || action === 'replay') startGame();
+      else if (action === 'exit') exitGame();
+      else if (action === 'contact') goTo('contact');
+    },
+  });
+
+  function startGame() {
+    if (mode !== 'projects') return;
+    if (!game.active) { // swap the eight project pieces for a full set
+      setActive(-1);
+      projPieces.forEach((pp, i) => {
+        gsap.to(pp.holder.position, { y: -0.4, duration: 0.35, delay: i * 0.03, ease: 'power2.in', overwrite: true });
+        gsap.to(pp.holder.scale, { x: 0.001, y: 0.001, z: 0.001, duration: 0.35, delay: i * 0.03, overwrite: true, onComplete: () => { pp.holder.visible = false; } });
+      });
+    }
+    clearHover();
+    panel.startGame(); // before game.enter(), which posts the first status line
+    game.enter(portrait());
+    document.body.classList.add('in-game');
+    flyTo(framed(gameView()), 2.0);
+  }
+  function exitGame() {
+    if (!game.active) return;
+    game.exit();
+    document.body.classList.remove('in-game');
+    if (mode !== 'projects') return;
+    boardToProjects();
+    panel.refreshProjects();
+    flyTo(framed(sectionView('projects')), 1.8);
+  }
 
   function boardToProjects() {
     decor.forEach((p, i) => {
@@ -197,7 +246,7 @@ function start() {
     if (mode === 'intro' || key === mode) return;
     const prev = mode; mode = key;
     Snd.tick(); resetOrbit(); clearHover(); updateDock();
-    if (prev === 'projects') boardToDecor();
+    if (prev === 'projects') { if (game.active) { game.exit(); document.body.classList.remove('in-game'); } boardToDecor(); }
     if (key === 'home') { panel.close(); flyTo(homeView(), 1.9); history.replaceState(null, '', location.pathname); return; }
     activeProject = -1;
     flyTo(framed(sectionView(key)), 2.1);
@@ -209,8 +258,8 @@ function start() {
   $('#pClose').addEventListener('click', () => goTo('home'));
   addEventListener('keydown', (e) => {
     if (mode === 'intro') return;
-    if (e.key === 'Escape') { if (mode === 'projects' && activeProject >= 0) selectProject(-1); else goTo('home'); }
-    if (mode === 'projects' && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+    if (e.key === 'Escape') { if (game.active) exitGame(); else if (mode === 'projects' && activeProject >= 0) selectProject(-1); else goTo('home'); }
+    if (mode === 'projects' && !game.active && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
       const d = e.key === 'ArrowRight' ? 1 : -1, n = PROJECTS.length;
       selectProject(activeProject < 0 ? (d > 0 ? 0 : n - 1) : (activeProject + d + n) % n);
     }
@@ -228,13 +277,13 @@ function start() {
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(9, 9), tip = $('#tip');
   let ptrMoved = false, down = null, dragging = false, lastX = 0, lastY = 0, hoverId = null;
 
-  function pick() {
+  function pickHit() {
     if (mode === 'intro') return null;
     ray.setFromCamera(ndc, camera);
-    const list = mode === 'projects' ? projMeshes : mode === 'home' ? giantMeshes.concat(sheetMeshes) : giantMeshes;
-    const hit = ray.intersectObjects(list, false)[0];
-    return hit ? hit.object.userData : null;
+    const list = mode === 'projects' ? (game.active ? game.pickList() : projMeshes) : mode === 'home' ? giantMeshes.concat(sheetMeshes) : giantMeshes;
+    return ray.intersectObjects(list, false)[0] || null;
   }
+  function pick() { const hit = pickHit(); return hit ? hit.object.userData : null; }
   const showTip = (text, color) => { tip.textContent = text; tip.style.setProperty('--c', color); tip.classList.add('on'); };
   const hideTip = () => tip.classList.remove('on');
   const clearHover = () => setHover(null);
@@ -303,7 +352,10 @@ function start() {
   function endPointer(e, cancelled) {
     pointers.delete(e.pointerId);
     if (pinching) { if (pointers.size === 0) pinching = false; return; }
-    if (down && !dragging && !cancelled) {
+    if (down && !dragging && !cancelled && game.active && mode === 'projects') {
+      setNdc(e); const hit = pickHit();
+      if (hit) game.tap(hit.object.userData, hit.point);
+    } else if (down && !dragging && !cancelled) {
       setNdc(e); const h = pick();
       if (h) { if (h.kind === 'section') goTo(h.key); else if (h.kind === 'sheet') goTo('about'); else selectProject(h.i); }
       else if (e.pointerType === 'touch' && mode === 'home') {
@@ -421,7 +473,12 @@ function start() {
     if (signOn && !REDUCE && Math.random() < 0.004) { signMat.opacity = 0.35; setTimeout(() => { signMat.opacity = 1; }, 60 + Math.random() * 100); }
     if (hl.visible) hl.material.opacity = 0.35 + Math.sin(elapsed * 4) * 0.15;
     codeT += dt; if (codeT > 0.07) { W.drawCode(codeT); codeT = 0; }
-    if (ptrMoved && !TOUCH && !down) { ptrMoved = false; setHover(pick()); }
+    if (ptrMoved && !TOUCH && !down) {
+      ptrMoved = false;
+      if (game.active && mode === 'projects') canvas.style.cursor = pick() ? 'pointer' : 'default';
+      else setHover(pick());
+    }
+    game.update(dt);
 
     if (!down && mode === 'home' && Math.abs(yawVel) > 0.0002) { yawTarget += yawVel; yawVel *= Math.pow(0.93, dt * 60); }
     const lerp = Math.min(1, dt * 6);
@@ -441,6 +498,7 @@ function start() {
 
   addEventListener('resize', () => {
     applyLens();
+    if (game.active) game.layout(portrait()); // phone rotated: move the clock
     if (document.body.classList.contains('ready')) $('#hint').textContent = hintText();
     renderer.setSize(innerWidth, innerHeight);
     if (composer) composer.setSize(innerWidth, innerHeight);
