@@ -110,6 +110,8 @@ function gameStatus(info) {
     case 'move': return `<span class="gk">Move ${info.k + 1} / ${n}</span> ${info.say} Play <b>${info.san}</b>: tap the glowing piece, then its square.`;
     case 'press': return `<span class="gk">Move ${info.k + 1} / ${n}</span> Good move. Now <b>press your clock</b> to reveal project ${info.k + 1}.`;
     case 'mate': return `<b>Checkmate!</b> You beat Hirantha in ${n} moves.`;
+    case 'handshake': return `<b>Checkmate!</b> Hirantha offers you his hand. <button class="btn shake" data-game="shake">🤝 Shake hands</button>`;
+    case 'gg': return `<b>Good game!</b> Thanks for playing, and for reading through my projects.`;
     default: return '';
   }
 }
@@ -121,6 +123,7 @@ const gameIntroHTML = () => `
     <li>Follow the arrow: tap the piece, then the square.</li>
     <li>Press your clock to reveal the next project.</li>
   </ol>
+  <p class="muted">Drag to look around the board, scroll or pinch to zoom, double-click or double-tap to reset.</p>
   <p class="muted">Move 8 is checkmate. Prefer to just read? Exit any time.</p>`;
 
 const winHTML = () => `
@@ -151,6 +154,19 @@ export function createPanel({ onSelectProject, getActiveProject, onGame }) {
 
   function open(key) {
     render(key);
+    reveal();
+  }
+  // Opens the panel with content that isn't one of the sections (the "Ask Hirantha" chat).
+  function openCustom({ glyph, eyebrow, title, color, html }) {
+    panel.style.setProperty('--sec', color);
+    document.querySelector('#pGlyph').textContent = glyph;
+    document.querySelector('#pEyebrow').textContent = eyebrow;
+    document.querySelector('#pTitle').textContent = title;
+    body.innerHTML = html; body.scrollTop = 0;
+    reveal();
+    return body;
+  }
+  function reveal() {
     gsap.killTweensOf(panel);
     const wasHidden = panel.hidden;
     panel.hidden = false;
@@ -220,5 +236,5 @@ export function createPanel({ onSelectProject, getActiveProject, onGame }) {
     }
   });
 
-  return { open, close, render, refreshProjects, startGame, gameUpdate };
+  return { open, openCustom, close, render, refreshProjects, startGame, gameUpdate };
 }
