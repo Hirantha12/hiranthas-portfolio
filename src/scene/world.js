@@ -213,8 +213,11 @@ export function buildWorld(scene, { touch, reduce }) {
     const f = new THREE.Mesh(new THREE.PlaneGeometry(0.56, 2.45), new THREE.MeshBasicMaterial({ map: tex(c) })); f.position.z = 0.052; g.add(f);
     box(0.5, 0.05, 0.05, darkWood, 0.3, 0.9, 0, g);
   }
-  // string lights under the roof edge
+  // string lights under the roof edge (grouped so the game can hide them on tall phones,
+  // where they would hang right in front of the opponent's face)
+  const stringLights = new THREE.Group(); scene.add(stringLights);
   {
+    const scene = stringLights; // the lights below are added to the group
     const pts = [], n = 15, cols = [0xff3d9a, 0xffb547, 0x3ef2ff, 0x57ffb0, 0xa77bff];
     for (let i = 0; i <= 40; i++) { const t = i / 40; pts.push(new V3(-4.1 + 8.2 * t, 3.3 - Math.sin(t * Math.PI) * 0.45, -1.98)); }
     scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x2a2238 })));
@@ -423,5 +426,5 @@ vec3 transformed = vec3((h.x - 0.5) * 46.0 + position.y * ${WIND.toFixed(2)}, yy
     rippleMesh.instanceMatrix.needsUpdate = true; rippleAlpha.needsUpdate = true;
   }
 
-  return { giants, giantMeshes, board, boardTop, ivoryS, ebonyS, sqPos, decor, projPieces, projMeshes, hl, sheet, sheetMeshes, signMat, signLight, flash, drawCode, updateRain, PIECE_SCALE: 0.62 };
+  return { giants, giantMeshes, board, boardTop, ivoryS, ebonyS, stringLights, sqPos, decor, projPieces, projMeshes, hl, sheet, sheetMeshes, signMat, signLight, flash, drawCode, updateRain, PIECE_SCALE: 0.62 };
 }
