@@ -247,6 +247,7 @@ export function buildWorld(scene, { touch, reduce }) {
   });
 
   const board = new THREE.Group(); board.position.set(0, 1.1, 0.2); scene.add(board);
+  let boardTop; // the playing surface, used to find which square was tapped in the game
   {
     const N = 1024, B = (N * 0.2) / 4.4, S = (N - 2 * B) / 8; const [c, x] = cnv(N, N);
     x.fillStyle = '#16101f'; x.fillRect(0, 0, N, N);
@@ -260,6 +261,7 @@ export function buildWorld(scene, { touch, reduce }) {
     }
     const p = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 4.4), new THREE.MeshStandardMaterial({ map: tex(c), roughness: 0.85, metalness: 0 }));
     p.rotation.x = -Math.PI / 2; p.position.y = 0.002; p.receiveShadow = true; board.add(p);
+    p.userData = { kind: 'gboard' }; boardTop = p;
   }
   const sqPos = (f, r) => new V3(-1.75 + f * 0.5, 0, 1.75 - r * 0.5);
 
@@ -421,5 +423,5 @@ vec3 transformed = vec3((h.x - 0.5) * 46.0 + position.y * ${WIND.toFixed(2)}, yy
     rippleMesh.instanceMatrix.needsUpdate = true; rippleAlpha.needsUpdate = true;
   }
 
-  return { giants, giantMeshes, board, sqPos, decor, projPieces, projMeshes, hl, sheet, sheetMeshes, signMat, signLight, flash, drawCode, updateRain, PIECE_SCALE: 0.62 };
+  return { giants, giantMeshes, board, boardTop, ivoryS, ebonyS, sqPos, decor, projPieces, projMeshes, hl, sheet, sheetMeshes, signMat, signLight, flash, drawCode, updateRain, PIECE_SCALE: 0.62 };
 }
