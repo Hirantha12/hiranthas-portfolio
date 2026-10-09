@@ -101,8 +101,8 @@ function start() {
     for (const key in giants) { const g = giants[key]; g.lw = g.baseLw * ls; g.label.scale.set(g.lw, (g.lw * 200) / 640, 1); }
   }
   const hintText = () => (innerWidth < 700
-    ? (TOUCH ? 'Tap a piece · drag to orbit' : 'Click a piece · drag to orbit')
-    : (TOUCH ? 'Tap a giant piece · drag to orbit 360°' : 'Click a giant piece · drag to orbit 360° · scroll to zoom · double-click to reset'));
+    ? (TOUCH ? 'Tap a piece · drag to orbit · pinch to zoom' : 'Click a piece · drag to orbit')
+    : (TOUCH ? 'Tap a giant piece · drag to orbit 360° · pinch to zoom · double-tap to reset' :'Click a giant piece · drag to orbit 360° · scroll to zoom · double-click to reset'));
   const portraitK = () => K;
   applyLens();
   const isDesktop = () => innerWidth > 860;
@@ -270,7 +270,17 @@ function start() {
   }
 
   const setNdc = (e) => { ndc.x = (e.clientX / innerWidth) * 2 - 1; ndc.y = -(e.clientY / innerHeight) * 2 + 1; };
+  // Touch: every finger is tracked so two fingers pinch-zoom instead of being read as a drag.
+  // A pinch locks out orbiting and tapping until all fingers are lifted.
+  const pointers = new Map();
+  let pinching = false, pinchDist = 0, pinchZoom = 1, lastTap = { t: 0, x: 0, y: 0 };
+  const fingerGap = () => { const [a, b] = [...pointers.values()]; return Math.hypot(a.x - b.x, a.y - b.y) || 1; };
   canvas.addEventListener('pointermove', (e) => {
+    if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinching) {
+      if (pointers.size >= 2 && mode === 'home') zoomTarget = clamp(pinchZoom * (pinchDist / fingerGap()), 0.5, 1.45);
+      return;
+    }
     setNdc(e); ptrMoved = true; mouse.x = ndc.x; mouse.y = ndc.y;
     tip.style.transform = `translate(${Math.min(e.clientX + 16, innerWidth - tip.offsetWidth - 8)}px, ${e.clientY + 18}px)`;
     if (down) {
@@ -284,17 +294,30 @@ function start() {
     }
   });
   canvas.addEventListener('pointerdown', (e) => {
-    setNdc(e); down = { x: e.clientX, y: e.clientY }; lastX = e.clientX; lastY = e.clientY; dragging = false; yawVel = 0;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    if (pointers.size === 2) { pinching = true; down = null; dragging = false; yawVel = 0; pinchDist = fingerGap(); pinchZoom = zoomTarget; hideTip(); return; }
+    if (pinching) return;
+    setNdc(e); down = { x: e.clientX, y: e.clientY }; lastX = e.clientX; lastY = e.clientY; dragging = false; yawVel = 0;
   });
-  canvas.addEventListener('pointerup', (e) => {
-    if (down && !dragging) {
+  function endPointer(e, cancelled) {
+    pointers.delete(e.pointerId);
+    if (pinching) { if (pointers.size === 0) pinching = false; return; }
+    if (down && !dragging && !cancelled) {
       setNdc(e); const h = pick();
       if (h) { if (h.kind === 'section') goTo(h.key); else if (h.kind === 'sheet') goTo('about'); else selectProject(h.i); }
+      else if (e.pointerType === 'touch' && mode === 'home') {
+        // Double-tap on empty space resets the view, like double-click on desktop.
+        const now = performance.now();
+        if (now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40) { resetOrbit(); lastTap.t = 0; }
+        else lastTap = { t: now, x: e.clientX, y: e.clientY };
+      }
     }
     down = null; dragging = false;
     if (mode === 'home' && !hoverId) canvas.style.cursor = 'grab';
-  });
+  }
+  canvas.addEventListener('pointerup', (e) => endPointer(e, false));
+  canvas.addEventListener('pointercancel', (e) => endPointer(e, true));
   canvas.addEventListener('wheel', (e) => {
     if (mode !== 'home') return;
     e.preventDefault();
