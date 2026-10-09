@@ -130,14 +130,16 @@ export function createGame({ scene, board, boardTop, sqPos, ivory, ebony, reduce
   }
 
   /* ---------- the game ---------- */
-  let state = 'off', k = 0, selected = null;
+  let state = 'off', k = 0, selected = null, gen = 0, avatar = null;
   const timers = [];
   const later = (fn, ms) => timers.push(setTimeout(fn, ms * D));
   const color = () => PROJECTS[k].color; // the arrow takes the colour of the project it unlocks
 
   function enter(portrait) {
     if (!all.length) buildPieces();
+    gen++;
     layout(portrait);
+    if (avatar) avatar.show();
     timers.forEach(clearTimeout); timers.length = 0;
     pieces.clear(); hideArrow(); selected = null; k = 0;
     all.forEach((p, i) => {
@@ -160,7 +162,8 @@ export function createGame({ scene, board, boardTop, sqPos, ivory, ebony, reduce
 
   function exit() {
     if (state === 'off') return;
-    state = 'off'; running = null;
+    state = 'off'; running = null; gen++;
+    if (avatar) avatar.hide();
     timers.forEach(clearTimeout); timers.length = 0;
     hideArrow();
     all.forEach((p, i) => {
@@ -173,17 +176,31 @@ export function createGame({ scene, board, boardTop, sqPos, ivory, ebony, reduce
     gsap.to(boardTop.rotation, { z: 0, duration: 0.9 * D, ease: 'power2.inOut' });
   }
 
+  // Hirantha's turn. With the avatar loaded he thinks, reaches over, carries the piece and presses
+  // his clock; without it (still loading, or it failed) the piece simply moves on its own.
   function whiteTurn() {
     state = 'white'; running = 'w';
     onChange({ phase: 'thinking', k });
-    const [from, to] = GAME[k].white;
-    later(() => movePiece(from, to, () => later(() => {
+    if (avatar) avatar.think();
+    const [from, to] = GAME[k].white, g = gen;
+    const yourTurn = () => {
+      if (g !== gen) return; // the game was left or restarted meanwhile
       press('w');
       const [bf, bt] = GAME[k].black;
       showArrow(bf, bt, color());
       state = 'move';
+      if (avatar) avatar.watchVisitor();
       onChange({ phase: 'move', k, say: GAME[k].say, san: GAME[k].black[2] });
-    }, 350)), 900 + Math.random() * 600);
+    };
+    later(() => {
+      const move = () => { if (g === gen) movePiece(from, to, afterMove); };
+      const afterMove = () => {
+        if (g !== gen) return;
+        if (avatar) avatar.letGo(() => { if (g === gen) avatar.pressClock(whiteBtn, yourTurn); });
+        else later(yourTurn, 350);
+      };
+      if (avatar) avatar.reachFor(pieces.get(from).g, move); else move();
+    }, 1100 + Math.random() * 600);
   }
 
   function blackMove() {
@@ -194,6 +211,7 @@ export function createGame({ scene, board, boardTop, sqPos, ivory, ebony, reduce
         state = 'mate'; running = null; drawClock();
         const king = pieces.get('e1');
         gsap.to(king.g.rotation, { z: -1.45, duration: 0.9 * D, delay: 0.4 * D, ease: 'bounce.out', onStart: () => Snd.clack(0.6, 0.8) });
+        if (avatar) avatar.lose();
         onChange({ phase: 'mate', k });
         return;
       }
@@ -216,9 +234,19 @@ export function createGame({ scene, board, boardTop, sqPos, ivory, ebony, reduce
     Snd.tick();
   }
 
-  // Taps from the page: data is the hit mesh's userData, point is the world hit point.
-  function tap(data, point) {
-    if (!data) return;
+  const squareOf = (data, point) => {
+    if (data.kind === 'gpiece') return data.piece.sq;
+    if (data.kind !== 'gboard') return null;
+    const v = board.worldToLocal(point.clone()); // undo the 180° turn from at()
+    const f = 7 - Math.round((v.x + 1.75) / 0.5), r = 7 - Math.round((1.75 - v.z) / 0.5);
+    return f >= 0 && f < 8 && r >= 0 && r < 8 ? FILES[f] + (r + 1) : null;
+  };
+
+  // Taps from the page: every hit under the finger, nearest first. Tall pieces can stand in
+  // front of the square you mean, so any hit on the right piece or square counts.
+  function tap(hits) {
+    if (!hits.length) return;
+    const data = hits[0].object.userData;
     if (data.kind === 'gclock') {
       if (state === 'start') { press('b'); whiteTurn(); }
       else if (state === 'press') {
@@ -228,21 +256,16 @@ export function createGame({ scene, board, boardTop, sqPos, ivory, ebony, reduce
       return;
     }
     if (state !== 'move') return;
-    let sq = null;
-    if (data.kind === 'gpiece') sq = data.piece.sq;
-    else if (data.kind === 'gboard') {
-      const v = board.worldToLocal(point.clone()); // undo the 180° turn from at()
-      const f = 7 - Math.round((v.x + 1.75) / 0.5), r = 7 - Math.round((1.75 - v.z) / 0.5);
-      if (f >= 0 && f < 8 && r >= 0 && r < 8) sq = FILES[f] + (r + 1);
-    }
     const [from, to] = GAME[k].black;
-    if (sq === from) select(pieces.get(from));
-    else if (sq === to) blackMove();
+    const squares = hits.map((h) => squareOf(h.object.userData, h.point));
+    if (squares.includes(to) && (selected || !squares.includes(from))) blackMove();
+    else if (squares.includes(from)) select(pieces.get(from));
     else nudge();
   }
 
   let pulse = 0;
   function update(dt) {
+    if (avatar) avatar.update(dt); // also runs while he shrinks away after the game
     if (state === 'off') return;
     if (running === 'w') tW = Math.max(0, tW - dt);
     else if (running === 'b') tB = Math.max(0, tB - dt);
@@ -257,6 +280,8 @@ export function createGame({ scene, board, boardTop, sqPos, ivory, ebony, reduce
 
   return {
     enter, exit, tap, update, pickList, layout,
+    // The avatar arrives with a lazy import(); if a game is already running he sits down at once.
+    setAvatar(a) { avatar = a; if (state !== 'off') { a.show(); if (state === 'move') a.watchVisitor(); } },
     clockPosition: () => clock.position.clone().setY(1.25),
     get active() { return state !== 'off'; },
   };
