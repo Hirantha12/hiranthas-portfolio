@@ -50,6 +50,21 @@ export const PROJECTS = [
     stack: ['WordPress', 'React', 'Analytics'], url: 'https://nsdconsultingservices.com/' },
 ];
 
+// "Play for them": the visitor plays Black against Hirantha and checkmates on move 8.
+// This is the Englund Gambit trap (1.d4 e5 2.dxe5 Nc6 3.Nf3 Qe7 4.Bf4 Qb4+ 5.Bd2 Qxb2
+// 6.Bc3 Bb4 7.Qd2 Bxc3 8.Qxc3 Qc1#), checked move by move with chess.js.
+// Each Black move unlocks PROJECTS[n] once the visitor presses the clock.
+export const GAME = [
+  { white: ['d2', 'd4', 'd4'], black: ['e7', 'e5', '…e5'], say: 'Hirantha opens with the queen pawn. Strike back in the centre.' },
+  { white: ['d4', 'e5', 'dxe5'], black: ['b8', 'c6', '…Nc6'], say: 'He grabbed a pawn. Develop your knight and hit it back.' },
+  { white: ['g1', 'f3', 'Nf3'], black: ['d8', 'e7', '…Qe7'], say: 'Bring the queen out. She has a plan.' },
+  { white: ['c1', 'f4', 'Bf4'], black: ['e7', 'b4', '…Qb4+'], say: 'Check! Fork the king and the b2 pawn.' },
+  { white: ['f4', 'd2', 'Bd2'], black: ['b4', 'b2', '…Qxb2'], say: 'Take the pawn. The queen is deep in his camp now.' },
+  { white: ['d2', 'c3', 'Bc3'], black: ['f8', 'b4', '…Bb4'], say: 'His bishop chases your queen. Pin it instead.' },
+  { white: ['d1', 'd2', 'Qd2'], black: ['b4', 'c3', '…Bxc3'], say: 'Capture the bishop. One more move.' },
+  { white: ['d2', 'c3', 'Qxc3'], black: ['b2', 'c1', '…Qc1#'], say: 'He took back, and left c1 open. Finish it.' },
+];
+
 // Career as a chess scoresheet.
 export const MOVES = [
   { n: 1, phase: 'Opening', when: 'Feb 2022 – Aug 2022', role: 'Software Engineer Intern', org: 'Explorelogy, Colombo', ann: '!',
