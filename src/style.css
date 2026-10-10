@@ -241,3 +241,78 @@ body.ready.home #hint{opacity:.9}
 @media (max-width:860px){.csugg.used{display:none}}
 .cstat{margin:0;font:500 11px var(--f-mono);letter-spacing:.04em;color:var(--amber)}
 .cstat.ok{color:var(--mint)}
+
+/* Hirantha's name tag on the board view (positioned beside him from main.js, left of the code screen) */
+.htag{position:fixed;left:0;top:0;z-index:4;display:flex;align-items:center;gap:7px;cursor:pointer;
+  padding:5px 13px 5px 9px;background:rgba(13,10,24,.82);border:1px solid var(--cyan);border-radius:999px;
+  box-shadow:0 0 14px -2px rgba(62,242,255,.55);color:var(--cream);opacity:0;transition:opacity .6s;
+  will-change:transform;transform-origin:100% 50%}
+body.ready.home .htag{opacity:1}
+.htag i{font-style:normal;font-size:15px;line-height:1}
+.htag span{display:flex;flex-direction:column;align-items:flex-start;line-height:1.15}
+.htag b{font:700 13px var(--f-ui);letter-spacing:.14em}
+.htag small{font:500 10px var(--f-mono);letter-spacing:.06em;color:var(--cyan)}
+.htag:hover,.htag:focus-visible{box-shadow:0 0 20px 0 rgba(62,242,255,.75);outline:none}
+/* tablets and phones: one small line */
+.htag.compact{gap:5px;padding:3px 9px 3px 7px;box-shadow:0 0 8px -2px rgba(62,242,255,.5)}
+.htag.compact i{font-size:11px}
+.htag.compact b{font-size:10px;letter-spacing:.12em}
+.htag.compact small{display:none}
+/* phones: smaller text, so the tag itself is smaller */
+@media (max-width:600px){
+  .htag.compact{gap:4px;padding:2px 7px 2px 5px}
+  .htag.compact i{font-size:9px}
+  .htag.compact b{font-size:8px;letter-spacing:.1em}
+}
+/* scoresheet tag: same as Hirantha's, in the scoresheet's amber */
+.stag{border-color:var(--amber);box-shadow:0 0 14px -2px rgba(255,181,71,.5);transform-origin:50% 100%}
+.stag small{color:var(--amber)}
+.stag:hover,.stag:focus-visible{box-shadow:0 0 20px 0 rgba(255,181,71,.7)}
+
+/* ---------- live project preview (src/ui/preview.js) ---------- */
+.pv-tools{display:flex;gap:2px;margin-left:6px;flex:none}
+.pv-tools button{cursor:pointer;background:transparent;border:1px solid var(--line);padding:3px 7px;font:500 10.5px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.pv-tools button[aria-pressed="true"]{color:var(--cream);border-color:var(--pc);background:color-mix(in srgb,var(--pc) 18%,transparent)}
+.pv-tools button:hover{color:var(--cream)}
+.pv-live{position:relative;aspect-ratio:4/3;max-width:100%;overflow:hidden;background:#0e0b19}
+.pv-live>.pv-stage{position:absolute;inset:0;aspect-ratio:auto;transition:opacity .4s}
+.pv-live.loaded>.pv-stage{opacity:0;pointer-events:none}
+.pv-frame{position:absolute;top:0;left:50%;transform:translateX(-50%);overflow:hidden;opacity:0;transition:opacity .4s;background:#fff}
+.pv-live.loaded .pv-frame{opacity:1}
+.pv-live[data-mode="mobile"] .pv-frame{top:8px;border-radius:14px;box-shadow:0 0 0 4px #1d1830,0 0 0 5px var(--line)}
+.pv-frame iframe{display:block;border:0;transform-origin:0 0;background:#fff}
+.pv-msg{position:absolute;left:10px;right:10px;bottom:10px;display:none;gap:10px;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--panel);border:1px solid var(--line);font:500 12px var(--f-mono);color:var(--muted)}
+.pv-msg a{color:var(--cream)}
+.pv-live.slow:not(.loaded) .pv-msg{display:flex}
+.pv-expand{position:absolute;right:8px;bottom:8px;cursor:pointer;padding:6px 10px;font:600 11px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:#0b0812;background:var(--pc);border:0;opacity:0;transition:opacity .3s}
+.pv-live.loaded .pv-expand{opacity:.92}
+.pv-live.loaded .pv-expand:hover,.pv-expand:focus-visible{opacity:1}
+.pv-note{margin:-8px 0 14px!important;font:400 11.5px/1.5 var(--f-mono);color:var(--muted)}
+ul.hl{margin:0;padding-left:18px;display:grid;gap:4px}
+ul.hl li::marker{color:var(--sec)}
+
+.pv-modal{position:fixed;inset:0;z-index:40;display:grid;place-items:center;padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px));background:rgba(5,4,10,.78);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.pvm-win{width:min(1320px,100%);height:min(900px,100%);display:flex;flex-direction:column;background:#0b0914;border:1px solid var(--line);box-shadow:0 0 0 1px color-mix(in srgb,var(--pc) 40%,transparent),0 30px 80px rgba(0,0,0,.6)}
+.pvm-body{flex:1;min-height:0;display:flex;flex-direction:column}
+.pvm-body .pv-live.big{flex:1;aspect-ratio:auto}
+.pvm-open{margin-left:8px;font:500 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--cream);text-decoration:none;flex:none}
+.pvm-close{margin-left:6px;cursor:pointer;background:transparent;border:1px solid var(--line);color:var(--cream);padding:3px 8px;font:500 12px var(--f-mono);flex:none}
+.pvm-close:hover,.pvm-open:hover{border-color:var(--pc);color:var(--pc)}
+@media (max-width:600px){.pv-modal{padding-inline:0}.pvm-win{height:100%;border-inline:0}.pvm-open{display:none}}
+
+/* loading indicator for live previews: a sweeping line along the top, a pulsing piece, a status chip */
+.pv-load{position:absolute;inset:0;pointer-events:none;transition:opacity .35s}
+.pv-live.loaded .pv-load{opacity:0}
+.pv-sweep{position:absolute;left:0;right:0;top:0;height:3px;overflow:hidden;background:color-mix(in srgb,var(--pc) 18%,transparent)}
+.pv-sweep::after{content:"";position:absolute;top:0;bottom:0;width:38%;left:-38%;background:var(--pc);box-shadow:0 0 12px var(--pc);animation:pvSweep 1.25s ease-in-out infinite}
+@keyframes pvSweep{to{left:100%}}
+.pv-chip{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;max-width:calc(100% - 24px);padding:6px 11px;background:rgba(11,9,20,.85);border:1px solid var(--line);font:500 11.5px var(--f-mono);color:var(--cream);white-space:nowrap}
+.pv-ltxt{overflow:hidden;text-overflow:ellipsis}
+.pv-spin{flex:none;width:12px;height:12px;border-radius:50%;border:2px solid color-mix(in srgb,var(--pc) 30%,transparent);border-top-color:var(--pc);animation:pvSpin .8s linear infinite}
+@keyframes pvSpin{to{transform:rotate(360deg)}}
+.pv-live:not(.loaded) .pv-stage .big{animation:pvPulse 1.6s ease-in-out infinite}
+@keyframes pvPulse{50%{opacity:.45;transform:scale(.94)}}
+.pv-live.slow:not(.loaded) .pv-chip{display:none}
+.pv-live .pv-stage .nm{bottom:auto;top:12px}
+.pv-live:not(.loaded) .pv-expand{display:none}
+@media (prefers-reduced-motion:reduce){.pv-sweep::after,.pv-spin,.pv-live:not(.loaded) .pv-stage .big{animation:none}.pv-sweep::after{left:0;width:100%;opacity:.5}}
