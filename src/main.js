@@ -22,6 +22,7 @@ import { buildWorld, P } from './scene/world.js';
 import { createGame } from './scene/game.js';
 import { createPanel } from './ui/panel.js';
 import { createChat } from './ui/chat.js';
+import { warm } from './ui/preview.js';
 
 // Colour setup: this matches the look of the original r128 prototype (linear, no colour
 // conversion). When you move to baked Blender textures, switch to the modern pipeline:
@@ -185,6 +186,47 @@ function start() {
 
   // "Ask Hirantha": click him in the kiosk to talk (see src/ui/chat.js and api/ask.js).
   const chat = createChat({ panel, onTalk: (on) => hirantha && hirantha.talk(on) });
+  // His name tag: a page element pinned to a point above his head, so it stays readable from
+  // the main view. Shown only on the board view while he's coding and the shop faces the camera.
+  // It scales with the scene (full size when the kiosk looks as big as on a large monitor) and
+  // switches to a small one-line tag on tablets and phones, so it never covers the shop's sign.
+  // The scoresheet gets the same kind of tag ("My story"), so visitors can tell it opens too.
+  const hTag = $('#hTag'), sTag = $('#sTag'), tagPos = new V3(), tagTop = new V3(), kioskAt = new V3(0.5, 2.1, -4.1);
+  const TAG_FULL_PPM = 56; // pixels per metre at the kiosk on a 1845px-wide screen
+  hTag.addEventListener('click', () => goTo('talk'));
+  sTag.addEventListener('click', () => goTo('about'));
+  let sheetBobbed = false;
+  // Pins a tag to a world point. `anchor` is the CSS offset of the tag from that point.
+  function pinTag(el, at, anchor, size) {
+    tagPos.copy(at).project(camera);
+    if (tagPos.z > 1 || Math.abs(tagPos.x) > 1.05 || Math.abs(tagPos.y) > 1.05) { el.hidden = true; return; }
+    el.classList.toggle('compact', size.compact);
+    const x = Math.min(innerWidth - 8, Math.max(8, ((tagPos.x + 1) / 2) * innerWidth)); // keep it on screen
+    el.style.transform = `translate(${x}px, ${((1 - tagPos.y) / 2) * innerHeight}px) ${anchor} scale(${size.scale.toFixed(3)})`;
+    el.hidden = false;
+  }
+  function placeNameTag() {
+    const board = mode === 'home' && document.body.classList.contains('ready');
+    if (!board) { hTag.hidden = sTag.hidden = true; return; }
+    // Size from how big the kiosk looks: full size on large screens, a one-line tag on tablets/phones.
+    tagPos.copy(kioskAt).project(camera);
+    const k = (Math.abs(tagTop.copy(kioskAt).setY(kioskAt.y + 1).project(camera).y - tagPos.y) * innerHeight / 2) / TAG_FULL_PPM;
+    const size = { compact: k < 0.7, scale: k < 0.7 ? 1 : Math.min(1, k) };
+
+    const at = hirantha ? hirantha.nameTag() : null;
+    if (at && camera.position.z > at.z + 1) pinTag(hTag, at, 'translate(-100%, -50%)', size); // left of him
+    else hTag.hidden = true;
+
+    // top edge of the clipboard; hidden when orbiting round to its back
+    sheetMeshes[1].getWorldPosition(tagTop).y += 0.25;
+    if (camera.position.z > tagTop.z - 1) {
+      pinTag(sTag, tagTop, 'translate(-50%, -100%)', size);
+      if (!sheetBobbed && !sTag.hidden) { // one gentle bob the first time, to draw the eye
+        sheetBobbed = true;
+        gsap.to(sheet.tilt.position, { y: 1.12, duration: 0.45, delay: 0.6, yoyo: true, repeat: 1, ease: 'sine.inOut' });
+      }
+    } else sTag.hidden = true;
+  }
   // Camera in front of the counter, looking at him at his laptop.
   // (on tall phones it comes in closer, over the counter, so the chessboard isn't in the way)
   const talkView = () => { const tgt = new V3(1.3, 2.0, -4.25); return { pos: tgt.clone().add(camera.aspect < 1 ? new V3(-0.3, 0.95, 3.1) : new V3(-0.7, 0.75, 5.4)), tgt }; };
@@ -351,6 +393,7 @@ function start() {
       if (mode !== h.key) showTip(`${GLYPH[g.s.piece]} ${h.key === 'about' ? 'About me' : g.s.title} · open`, g.s.color);
     } else {
       if (h.i !== activeProject) gsap.to(projPieces[h.i].inner.position, { y: 0.1, duration: 0.3 });
+      warm(PROJECTS[h.i].url, PROJECTS[h.i].name); // start loading its site before the click
       showTip(`${PROJECTS[h.i].sq} · ${PROJECTS[h.i].name}`, PROJECTS[h.i].color);
     }
   }
@@ -519,6 +562,7 @@ function start() {
       else setHover(pick());
     }
     game.update(dt);
+    placeNameTag();
     W.stringLights.visible = !game.active && mode !== 'talk'; // from the visitor's seat they'd hang right over his face
 
     if (!down && canOrbit() && Math.abs(yawVel) > 0.0002) { yawTarget += yawVel; yawVel *= Math.pow(0.93, dt * 60); }
