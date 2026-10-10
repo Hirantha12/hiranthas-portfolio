@@ -213,6 +213,7 @@ export function createGame({ scene, camera, board, boardTop, sqPos, ivory, ebony
     const sharp = pieces.has(to) || san.includes('+'); // a capture or a check surprises him
     hideArrow(); selected = null; state = 'busy'; // the move animation lifts it from wherever it is
     movePiece(from, to, () => {
+      if (g !== gen) return; // the game was left or restarted while the piece was moving
       if (k === GAME.length - 1) { // checkmate: Hirantha's king tips over
         state = 'mate'; running = null; drawClock();
         const king = pieces.get('e1');
