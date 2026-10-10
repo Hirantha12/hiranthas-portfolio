@@ -253,20 +253,12 @@ export function createAvatar({ scene, position }) {
   }
   const toLocal = (world) => root.worldToLocal(world.clone());
 
-  /* ---------- name label over his seat: "click to talk" ---------- */
-  const label = (() => {
-    const [c, x] = cnv(512, 128);
-    x.textAlign = 'center'; x.textBaseline = 'middle';
-    x.fillStyle = 'rgba(13,10,24,.82)'; x.beginPath(); x.roundRect(36, 14, 440, 100, 50); x.fill();
-    x.strokeStyle = '#3ef2ff'; x.lineWidth = 4; x.shadowColor = '#3ef2ff'; x.shadowBlur = 14; x.stroke(); x.shadowBlur = 0;
-    x.font = '700 40px "Chakra Petch", sans-serif'; x.fillStyle = '#f3ead8'; x.fillText('HIRANTHA', 256, 52);
-    x.font = '500 24px "JetBrains Mono", monospace'; x.fillStyle = '#3ef2ff'; x.fillText('💬 click to talk', 256, 90);
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex(c), transparent: true, depthWrite: false }));
-    s.scale.set(1.3, 0.325, 1); s.position.set(1.3, 3.08, -4.1); s.visible = false; scene.add(s);
-    return s;
-  })();
-  // Everything clickable on him (body and label) carries the same tag for the page's picker.
-  const pickMeshes = [label];
+  // Where his name tag points: just left of him at chest height. The tag extends to the left of
+  // this point, between the bookshelf and the laptop, so it never covers the code screen.
+  // The tag itself is a page element (#hTag in main.js), so it stays readable at any distance.
+  const labelAt = new V3(0.5, 2.1, -4.1);
+  // Everything clickable on him carries the same tag for the page's picker.
+  const pickMeshes = [];
   root.traverse((o) => { if (o.isMesh) pickMeshes.push(o); });
   pickMeshes.forEach((o) => { o.userData = { kind: 'hirantha' }; });
 
@@ -295,8 +287,6 @@ export function createAvatar({ scene, position }) {
       setFace(open ? 'talk' : 'smile');
       head.rotation.x += Math.sin(flap * 5) * 0.025;
     }
-    label.visible = root.visible && working;
-    if (label.visible) label.position.y = 3.08 + Math.sin(t * 1.4) * 0.04;
   }
   let talking = false, flap = 0;
 
@@ -475,5 +465,8 @@ export function createAvatar({ scene, position }) {
   }
   function talk(on) { talking = on; flap = 0; if (!on) setFace('smile'); else lookAtVisitor(); }
 
-  return { pickMeshes, chatMode, talk, show, hide, sitDown, update, think, reachFor, letGo, pressClock, react, lose, offerHand, releaseHand, watchVisitor };
+  // Name tag anchor (world position) while he's at his laptop, or null when it shouldn't show.
+  const nameTag = () => (root.visible && working ? labelAt : null);
+
+  return { pickMeshes, nameTag, chatMode, talk, show, hide, sitDown, update, think, reachFor, letGo, pressClock, react, lose, offerHand, releaseHand, watchVisitor };
 }
