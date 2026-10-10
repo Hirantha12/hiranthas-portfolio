@@ -17,7 +17,11 @@ export const Snd = {
     const sr = ctx.sampleRate;
     const master = (this.master = ctx.createGain());
     master.gain.value = 0;
-    master.connect(ctx.destination);
+    // A gentle limiter so nothing (thunder, a burst of drips) ever jumps out at the listener.
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -20; limiter.knee.value = 12; limiter.ratio.value = 4;
+    limiter.attack.value = 0.01; limiter.release.value = 0.4;
+    master.connect(limiter).connect(ctx.destination);
     master.gain.setTargetAtTime(this.muted ? 0 : 1, ctx.currentTime, 1.2);
 
     const white = ctx.createBuffer(1, sr * 3, sr);
@@ -33,14 +37,22 @@ export const Snd = {
     const filt = (type, f, q) => { const n = ctx.createBiquadFilter(); n.type = type; n.frequency.value = f; if (q) n.Q.value = q; return n; };
     const gain = (v) => { const g = ctx.createGain(); g.gain.value = v; return g; };
 
-    // rain hiss
+    // Rain, tuned to sound like rain heard from indoors: warm and soft, without bright hiss.
+    // Both layers go through one bus whose level drifts slowly up and down, like gusts.
+    const RAIN_VOLUME = 0.25; // overall rain level (hiss, body and drips); lower = quieter
+    const rainBus = gain(RAIN_VOLUME); rainBus.connect(master);
+    const gust = ctx.createOscillator(), gustDepth = gain(RAIN_VOLUME * 0.14);
+    gust.frequency.value = 0.045; gust.connect(gustDepth).connect(rainBus.gain); gust.start();
+    // rain hiss: darker and quieter (highs rolled off above ~1.8 kHz)
     const r = ctx.createBufferSource(); r.buffer = white; r.loop = true;
-    r.connect(filt('highpass', 500)).connect(filt('lowpass', 3400)).connect(gain(0.15)).connect(master);
+    const shelf = filt('highshelf', 2500); shelf.gain.value = -10;
+    r.connect(filt('highpass', 350)).connect(filt('lowpass', 1800)).connect(shelf).connect(gain(0.08)).connect(rainBus);
     r.start();
-    // rain body
+    // rain body: a light, soft wash; the deep rumble below ~150 Hz is cut so it doesn't feel heavy
     const rb = ctx.createBufferSource(); rb.buffer = brown; rb.loop = true;
-    rb.connect(filt('lowpass', 450)).connect(gain(0.22)).connect(master);
+    rb.connect(filt('highpass', 150)).connect(filt('lowpass', 600)).connect(gain(0.07)).connect(rainBus);
     rb.start();
+    this.rainBus = rainBus;
     // soft A-minor pad for the game mood
     const pad = gain(0), plp = filt('lowpass', 700);
     plp.connect(pad); pad.connect(master);
@@ -58,19 +70,22 @@ export const Snd = {
 
   ok() { return this.ctx && this.ctx.state === 'running'; },
 
-  dripLoop() { setTimeout(() => { this.drip(); this.dripLoop(); }, 70 + Math.random() * 230); },
+  dripLoop() { setTimeout(() => { this.drip(); this.dripLoop(); }, 160 + Math.random() * 420); },
 
+  // A single soft drop: lower pitched, gentle attack, placed somewhere left or right.
   drip() {
     if (!this.ok()) return;
     const ctx = this.ctx, t = ctx.currentTime;
     const s = ctx.createBufferSource(); s.buffer = this.white;
-    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1800 + Math.random() * 4200; bp.Q.value = 7;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 900 + Math.random() * 1700; bp.Q.value = 3;
     const g = ctx.createGain();
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(0.04 + Math.random() * 0.08, t + 0.004);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05 + Math.random() * 0.06);
-    s.connect(bp).connect(g).connect(this.master);
-    s.start(t, Math.random() * 2, 0.15);
+    g.gain.linearRampToValueAtTime(0.012 + Math.random() * 0.025, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.07 + Math.random() * 0.08);
+    let out = g;
+    if (ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = Math.random() * 1.4 - 0.7; g.connect(p); out = p; }
+    s.connect(bp).connect(g); out.connect(this.rainBus);
+    s.start(t, Math.random() * 2, 0.18);
   },
 
   thunder() {
@@ -79,13 +94,14 @@ export const Snd = {
     const s = ctx.createBufferSource(); s.buffer = this.brown;
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass';
     lp.frequency.setValueAtTime(260, t); lp.frequency.exponentialRampToValueAtTime(70, t + 4);
+    // distant rumble: rolls in over ~0.7 s instead of a sudden crack, and stays fairly quiet
     const g = ctx.createGain();
-    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(1.3, t + 0.25); g.gain.exponentialRampToValueAtTime(0.001, t + 4.2);
-    s.connect(lp).connect(g).connect(this.master); s.start(t, Math.random(), 4.4);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.7, t + 0.7); g.gain.exponentialRampToValueAtTime(0.001, t + 4.8);
+    s.connect(lp).connect(g).connect(this.master); s.start(t, Math.random(), 5);
     const c = ctx.createBufferSource(); c.buffer = this.white;
-    const cl = ctx.createBiquadFilter(); cl.type = 'lowpass'; cl.frequency.value = 900;
-    const cg = ctx.createGain(); cg.gain.setValueAtTime(0.35, t); cg.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
-    c.connect(cl).connect(cg).connect(this.master); c.start(t, 0, 0.6);
+    const cl = ctx.createBiquadFilter(); cl.type = 'lowpass'; cl.frequency.value = 500;
+    const cg = ctx.createGain(); cg.gain.setValueAtTime(0, t); cg.gain.linearRampToValueAtTime(0.08, t + 0.06); cg.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+    c.connect(cl).connect(cg).connect(this.master); c.start(t, 0, 0.7);
   },
 
   // wooden piece landing on a board
