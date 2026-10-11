@@ -44,9 +44,21 @@ const fontsReady = Promise.race([
   new Promise((r) => setTimeout(r, 3500)),
 ]).catch(() => {});
 
-fontsReady.then(start);
+// Shown inside another page (for example as the live preview in its own Projects panel): wait
+// for START before building the 3D board, so the preview costs almost nothing until asked.
+const EMBEDDED = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+if (EMBEDDED) {
+  const btn = $('#startBtn');
+  document.body.classList.add('embedded');
+  btn.disabled = false;
+  stLoad.innerHTML = '<b>Live preview.</b> Press START to load the 3D board';
+  btn.addEventListener('click', () => {
+    btn.disabled = true; stLoad.textContent = 'Setting up the board…';
+    fontsReady.then(() => start(true));
+  }, { once: true });
+} else fontsReady.then(() => start(false));
 
-function start() {
+function start(autoStart) {
   const canvas = $('#c');
   let renderer;
   try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' }); }
@@ -234,7 +246,7 @@ function start() {
   function startGame() {
     if (mode !== 'projects') return;
     loadAvatar();
-    if (!game.active) { // swap the eight project pieces for a full set
+    if (!game.active) { // swap the project pieces for a full set
       setActive(-1);
       projPieces.forEach((pp, i) => {
         gsap.to(pp.holder.position, { y: -0.4, duration: 0.35, delay: i * 0.03, ease: 'power2.in', overwrite: true });
@@ -284,13 +296,14 @@ function start() {
   function setActive(i) {
     activeProject = i;
     projPieces.forEach((pp, j) => {
-      gsap.to(pp.inner.position, { y: j === i ? 0.3 : 0, duration: 0.5, ease: 'power3.out' });
-      gsap.to(pp.mat, { emissiveIntensity: j === i ? 0.9 : 0.18, duration: 0.4 });
+      gsap.to(pp.inner.position, { y: j === i ? 0.2 : 0, duration: 0.5, ease: 'power3.out' });
+      gsap.to(pp.mat, { emissiveIntensity: j === i ? 0.1 : 0.05, duration: 0.4 }); // a soft tint, never a glare
+      gsap.to(pp.ring.material, { opacity: j === i ? 1 : 0, duration: 0.3 });
     });
     if (i >= 0) {
       const pp = projPieces[i];
       gsap.fromTo(pp.inner.rotation, { y: pp.baseRot }, { y: pp.baseRot + Math.PI * 2, duration: REDUCE ? 0 : 1.1, ease: 'power2.out' });
-      const p = sqPos(i, 0); hl.position.x = p.x; hl.position.z = p.z;
+      const sq = PROJECTS[i].sq, p = sqPos('abcdefgh'.indexOf(sq[0]), +sq[1] - 1); hl.position.x = p.x; hl.position.z = p.z;
       hl.material.color.set(PROJECTS[i].color); hl.visible = true;
     } else hl.visible = false;
   }
@@ -377,7 +390,10 @@ function start() {
         gsap.to(g.label.scale, { x: g.lw, y: (g.lw * 200) / 640, duration: 0.3 });
       } else {
         const i = +hoverId.slice(2);
-        if (projPieces[i]) gsap.to(projPieces[i].inner.position, { y: i === activeProject ? 0.3 : 0, duration: 0.3 });
+        if (projPieces[i]) {
+          gsap.to(projPieces[i].inner.position, { y: i === activeProject ? 0.2 : 0, duration: 0.3 });
+          gsap.to(projPieces[i].ring.material, { opacity: i === activeProject ? 1 : 0, duration: 0.3 });
+        }
       }
     }
     hoverId = id;
@@ -392,7 +408,10 @@ function start() {
       gsap.to(g.label.scale, { x: g.lw * 1.12, y: (g.lw * 1.12 * 200) / 640, duration: 0.3 });
       if (mode !== h.key) showTip(`${GLYPH[g.s.piece]} ${h.key === 'about' ? 'About me' : g.s.title} · open`, g.s.color);
     } else {
-      if (h.i !== activeProject) gsap.to(projPieces[h.i].inner.position, { y: 0.1, duration: 0.3 });
+      if (h.i !== activeProject) {
+        gsap.to(projPieces[h.i].inner.position, { y: 0.1, duration: 0.3 });
+        gsap.to(projPieces[h.i].ring.material, { opacity: 0.55, duration: 0.2 });
+      }
       warm(PROJECTS[h.i].url, PROJECTS[h.i].name); // start loading its site before the click
       showTip(`${PROJECTS[h.i].sq} · ${PROJECTS[h.i].name}`, PROJECTS[h.i].color);
     }
@@ -463,13 +482,64 @@ function start() {
   /* =========================================================
      LIGHTNING
      ========================================================= */
+  // Like a real storm: the strike is somewhere out beyond the city. The sky lights up in a few
+  // quick flickers (the plaza only gently, from that direction), sometimes you see the bolt
+  // itself, and the thunder arrives later the further away it was: a close one cracks, a far
+  // one only rumbles.
+  const skyBase = scene.background.clone(), fogBase = scene.fog.color.clone(), skyLit = new THREE.Color(0x2c3156);
+  const boltMat = new THREE.LineBasicMaterial({ color: 0xe6ebff, transparent: true, opacity: 0, fog: false, depthWrite: false });
+  const bolt = new THREE.LineSegments(new THREE.BufferGeometry(), boltMat);
+  bolt.frustumCulled = false; bolt.visible = false; scene.add(bolt);
+  // A jagged bolt from the clouds down to the skyline, with a couple of short branches.
+  function makeBolt(x, z) {
+    const pts = [], side = new V3(-z, 0, x).normalize();
+    const path = (p, steps, drift, out) => {
+      for (let i = 0; i < steps && p.y > 4; i++) {
+        const q = p.clone().add(side.clone().multiplyScalar((Math.random() - 0.5) * 5 + drift)).add(new V3(0, -(3 + Math.random() * 4), 0));
+        q.x += (Math.random() - 0.5) * 1.5; q.z += (Math.random() - 0.5) * 1.5;
+        pts.push(p.x, p.y, p.z, q.x, q.y, q.z); out && out.push(q); p = q;
+      }
+    };
+    const trunk = [];
+    path(new V3(x, 78, z), 30, 0, trunk);
+    for (let b = 0; b < 2 + Math.floor(Math.random() * 2); b++) { // branches
+      const from = trunk[Math.floor(Math.random() * trunk.length * 0.6)];
+      if (from) path(from.clone(), 4 + Math.floor(Math.random() * 5), (Math.random() < 0.5 ? -1 : 1) * 2.2, null);
+    }
+    const n = pts.length; for (let i = 0; i < n; i += 3) pts.push(pts[i] + 0.25, pts[i + 1], pts[i + 2]); // a little thicker
+    bolt.geometry.dispose();
+    bolt.geometry = new THREE.BufferGeometry(); bolt.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  }
+  const L = { v: 0 }; let strength = 1, boltOn = false;
+  function applyFlash() {
+    const v = Math.min(1, L.v * strength);
+    // Close up (board, chat) the bright board would glare, so the plaza light stays subtler there;
+    // the sky still lights up fully.
+    flash.intensity = I(mode === 'home' ? 0.5 : 0.1) * v;
+    scene.background.lerpColors(skyBase, skyLit, v);
+    scene.fog.color.lerpColors(fogBase, skyLit, v * 0.75);
+    boltMat.opacity = boltOn ? Math.min(1, L.v * 1.5) : 0;
+  }
   function lightning() {
     if (import.meta.env.DEV && window.__noLightning) return;
-    const tl = gsap.timeline();
-    if (REDUCE) tl.to(flash, { intensity: I(1.2), duration: 0.15 }).to(flash, { intensity: 0, duration: 0.8 });
-    else tl.to(flash, { intensity: I(4), duration: 0.05 }).to(flash, { intensity: I(0.3), duration: 0.08 }).to(flash, { intensity: I(3), duration: 0.05 }).to(flash, { intensity: 0, duration: 0.7 });
-    setTimeout(() => Snd.thunder(), 450 + Math.random() * 1100);
+    const near = Math.random();                       // 0: far away … 1: close
+    const a = (Math.random() * 2 - 1) * 1.05;         // direction, out beyond the kiosk
+    const R = 112 - near * 22, bx = Math.sin(a) * R, bz = -Math.cos(a) * R;
+    strength = 0.45 + near * 0.55;
+    flash.position.set(bx * 0.4, 50, bz * 0.4);       // from the strike's side of the sky, not the camera
+    makeBolt(bx, bz); bolt.visible = !REDUCE; boltOn = !REDUCE;
+    gsap.killTweensOf(L); L.v = 0;
+    const tl = gsap.timeline({ onUpdate: applyFlash, onComplete: () => { bolt.visible = false; boltOn = false; L.v = 0; applyFlash(); } });
+    if (REDUCE) tl.to(L, { v: 0.45, duration: 0.3 }).to(L, { v: 0, duration: 1.4 });
+    else {
+      const pulses = 1 + Math.floor(Math.random() * 3);   // real strikes flicker 1-3 times
+      for (let i = 0; i < pulses; i++) tl.to(L, { v: 1 - i * 0.18, duration: 0.03 }).to(L, { v: 0.1, duration: 0.05 + Math.random() * 0.09 });
+      tl.add(() => { boltOn = false; }).to(L, { v: 0.3, duration: 0.05 }).to(L, { v: 0, duration: 0.7 + near * 0.5, ease: 'power2.out' });
+    }
+    // sound travels about 3 s per km: a close strike is heard almost at once, a far one later
+    setTimeout(() => Snd.thunder(near, Math.sin(a)), 450 + (1 - near) * 4200);
   }
+  if (import.meta.env.DEV) Object.assign(window.__dbg, { lightning, flashAt: (v) => { L.v = v; boltOn = v > 0; bolt.visible = v > 0; applyFlash(); }, makeBolt });
   const scheduleLightning = () => setTimeout(() => { lightning(); scheduleLightning(); }, 15000 + Math.random() * 17000);
 
   /* =========================================================
@@ -508,8 +578,9 @@ function start() {
   // and the first visit to Projects don't stutter. compileAsync doesn't block the page.
   function ready() {
     startBtn.disabled = false;
-    stLoad.innerHTML = '<b>Ready.</b> 64 squares, 8 projects, 1 rainy night';
+    stLoad.innerHTML = `<b>Ready.</b> 64 squares, ${PROJECTS.length} projects, 1 rainy night`;
     startBtn.focus({ preventScroll: true });
+    if (autoStart) startBtn.click(); // embedded: START was already pressed
   }
   const hidden = projPieces.map((p) => p.holder); // still shrunk under the board, so nothing shows
   hidden.forEach((o) => { o.visible = true; });
@@ -517,8 +588,9 @@ function start() {
     hidden.forEach((o) => { o.visible = false; });
     ready();
   });
+  let started = false; // nothing is drawn behind the START screen
   startBtn.addEventListener('click', () => {
-    startBtn.disabled = true;
+    startBtn.disabled = true; started = true;
     Snd.init(); syncSnd();
     gsap.to('#start', { opacity: 0, duration: 0.9, ease: 'power2.out', onComplete: () => { $('#start').hidden = true; } });
     runIntro(location.hash.slice(1));
@@ -549,6 +621,7 @@ function start() {
 
   function frame(now) {
     requestAnimationFrame(frame);
+    if (!started) { last = now; return; } // the START screen covers the canvas: skip the work
     const rawDt = (now - last) / 1000;
     const dt = Math.min(rawDt, 0.05); last = now; elapsed += dt;
     W.updateRain(dt);
