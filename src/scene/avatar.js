@@ -172,6 +172,9 @@ export function createAvatar({ scene, position }) {
     mesh(new THREE.BoxGeometry(0.13, 0.02, 0.3), soleMat, knee, s * 0.01, -0.468, 0.07);
     return { hip, knee };
   });
+  // Walking and jumping (the Experience "Knight's tour"): J.walk blends the stride in and out,
+  // J.air tucks the legs during a jump.
+  const J = { walk: 0, air: 0, was: false }; let stride = 0;
   // a bar stool for when he is working inside the kiosk
   const stool = new THREE.Group(); stool.visible = false; root.add(stool);
   {
@@ -280,6 +283,16 @@ export function createAvatar({ scene, position }) {
     look.lerp(lookT, Math.min(1, dt * 4));
     head.lookAt(tmp.copy(look).applyMatrix4(root.matrixWorld));
     if (mood === 'think') head.rotation.z += Math.sin(t * 2) * 0.03;
+    // stride: legs and arms swing in opposite phase; in the air the knees tuck up
+    if (J.walk > 0.001 || J.air > 0.001) {
+      stride += dt * 7.5;
+      const s = Math.sin(stride) * J.walk, a = J.air;
+      legs[0].hip.rotation.x = -s * 0.42 - a * 0.7; legs[1].hip.rotation.x = s * 0.42 - a * 0.5;
+      legs[0].knee.rotation.x = Math.max(0, s) * 0.6 + a * 1.3; legs[1].knee.rotation.x = Math.max(0, -s) * 0.6 + a * 1.1;
+      if (!otherArm.follow && J.walk > 0.001) { otherArm.hand.position.z = SIDE[0].z + s * 0.22; playArm.hand.position.z = SIDE[1].z - s * 0.22; }
+      torso.position.y += Math.abs(Math.cos(stride)) * 0.025 * J.walk;
+      J.was = true;
+    } else if (J.was) { legs.forEach(({ hip, knee }) => { hip.rotation.x = 0; knee.rotation.x = 0; }); J.was = false; }
     // talking: the mouth flips between open and closed shapes, with a small head bob
     if (talking) {
       flap += dt;
@@ -308,6 +321,7 @@ export function createAvatar({ scene, position }) {
   const screenAt = new V3(1.3, 1.62, -3.15); // his laptop screen (world)
   let working = false;
   function setPose(sit) {
+    J.walk = 0; J.air = 0; J.was = false;
     legs.forEach(({ hip, knee }) => { hip.rotation.x = sit ? -Math.PI / 2 : 0; knee.rotation.x = sit ? Math.PI / 2 : 0; });
     stool.visible = sit; mug.visible = sit;
     root.position.copy(sit ? WORK_POS : PLAY_POS);
@@ -468,5 +482,65 @@ export function createAvatar({ scene, position }) {
   // Name tag anchor (world position) while he's at his laptop, or null when it shouldn't show.
   const nameTag = () => (root.visible && working ? labelAt : null);
 
-  return { pickMeshes, nameTag, chatMode, talk, show, hide, sitDown, update, think, reachFor, letGo, pressClock, react, lose, offerHand, releaseHand, watchVisitor };
+  /* ---------- out on the plaza: the Experience "Knight's tour" ---------- */
+  const SIDE = [new V3(-0.42, 1.04, 0.06), new V3(0.42, 1.04, 0.06)]; // hands relaxed at his sides
+  const toSide = (a, d = 0.4) => ({ x: SIDE[a === otherArm ? 0 : 1].x, y: SIDE[a === otherArm ? 0 : 1].y, z: SIDE[a === otherArm ? 0 : 1].z, duration: d, ease: 'power2.inOut' });
+  const shortest = (from, to) => from + Math.atan2(Math.sin(to - from), Math.cos(to - from));
+  // Appears standing on the plaza at `pos`, turned towards `faceY` (radians, 0 = +z).
+  function stand(pos, faceY = 0) {
+    if (act) act.kill();
+    gsap.killTweensOf([root.scale, root.rotation, root.position]);
+    working = false; talking = false; mood = 'idle';
+    setPose(false); root.position.copy(pos); root.rotation.set(0, faceY, 0);
+    arms.forEach((a, i) => { a.follow = null; a.hand.position.copy(SIDE[i]); });
+    setFace('happy'); lookAtVisitor();
+    root.visible = true; root.scale.setScalar(0.001);
+    gsap.to(root.scale, { x: SIZE, y: SIZE, z: SIZE, duration: 0.6, ease: 'back.out(1.6)' });
+  }
+  function turnTo(y, d = 0.45) { return gsap.to(root.rotation, { y: shortest(root.rotation.y, y), duration: d, ease: 'power2.inOut' }); }
+  function wave(done) {
+    start().to(otherArm.hand.position, { x: -0.45, y: 2.15, z: 0.25, duration: 0.4, ease: 'back.out(1.6)' })
+      .to(otherArm.hand.position, { x: -0.3, duration: 0.18, yoyo: true, repeat: 3, ease: 'sine.inOut' })
+      .to(otherArm.hand.position, toSide(otherArm))
+      .add(() => done && done());
+  }
+  // Points ahead with his right hand while explaining.
+  function point(on) {
+    start().to(playArm.hand.position, on ? { x: 0.55, y: 1.6, z: 0.55, duration: 0.35, ease: 'power2.out' } : toSide(playArm));
+  }
+  // A knight's jump: turn towards the landing square, crouch, leap in an arc, land with a bounce.
+  function jumpTo(pos, done) {
+    const from = root.position.clone(), dx = pos.x - from.x, dz = pos.z - from.z;
+    const arc = { t: 0 }, H = 1.5;
+    mood = 'idle'; setFace('happy'); lookT.set(0, 1.3, 4);
+    start().add(turnTo(Math.atan2(dx, dz), 0.35))
+      .to(J, { air: 0.5, duration: 0.18 }, '-=0.05').to(root.position, { y: -0.12, duration: 0.18 }, '<') // crouch
+      .to(otherArm.hand.position, { y: 1.75, z: 0.3, duration: 0.2 }, '<').to(playArm.hand.position, { y: 1.75, z: 0.3, duration: 0.2 }, '<')
+      .to(J, { air: 1, duration: 0.15 })
+      .to(arc, { t: 1, duration: 0.85, ease: 'none', onUpdate: () => {
+        root.position.set(from.x + dx * arc.t, Math.sin(Math.PI * arc.t) * H, from.z + dz * arc.t);
+      } }, '<')
+      .to(J, { air: 0.4, duration: 0.12 })
+      .to(root.position, { y: -0.1, duration: 0.1 }, '<').to(root.position, { y: 0, duration: 0.25, ease: 'back.out(2)' })
+      .to(J, { air: 0, duration: 0.25 }, '<')
+      .to(otherArm.hand.position, toSide(otherArm, 0.3), '<').to(playArm.hand.position, toSide(playArm, 0.3), '<')
+      .add(() => done && done());
+  }
+  // He tells you no with a little head shake (a legal move, but not the way his career went).
+  function shakeHead() {
+    const s = { v: 0 };
+    start().to(s, { v: 1, duration: 0.7, ease: 'none', onUpdate: () => { lookT.x = Math.sin(s.v * Math.PI * 4) * 1.2; } }).add(() => { lookT.x = 0; });
+  }
+  // The end of the tour: arms up, a little hop.
+  function celebrate() {
+    setFace('happy'); lookAtVisitor();
+    start().to(otherArm.hand.position, { x: -0.4, y: 2.45, z: 0.15, duration: 0.35, ease: 'back.out(2)' })
+      .to(playArm.hand.position, { x: 0.4, y: 2.45, z: 0.15, duration: 0.35, ease: 'back.out(2)' }, '<')
+      .to(root.position, { y: 0.25, duration: 0.22, yoyo: true, repeat: 3, ease: 'power2.out' })
+      .to(otherArm.hand.position, toSide(otherArm, 0.5), '+=0.3').to(playArm.hand.position, toSide(playArm, 0.5), '<');
+  }
+  const where = () => root.position;
+
+  return { pickMeshes, nameTag, chatMode, talk, show, hide, sitDown, update, think, reachFor, letGo, pressClock, react, lose, offerHand, releaseHand, watchVisitor,
+    stand, turnTo, wave, point, jumpTo, shakeHead, celebrate, where };
 }
