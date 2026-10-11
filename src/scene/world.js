@@ -97,7 +97,11 @@ export function buildWorld(scene, { touch, reduce }) {
     const H = HEIGHT[s.piece] * s.scale;
     const lw = key === 'about' ? 4.6 : 3.3;
     const label = labelSprite(s.label, `${GLYPH[s.piece]} ${PIECE_NAME[s.piece].toUpperCase()} · ${s.sq}`, s.color, lw);
-    label.position.y = H + (key === 'about' ? 1.2 : 0.85); holder.add(label);
+    // Experience and Skills (the outer pieces) float higher, so from the front their labels
+    // don't run into Projects and Contact.
+    label.position.y = H + (key === 'about' ? 1.2 : key === 'experience' || key === 'skills' ? 1.75 : 0.85); holder.add(label);
+    // The floating name is clickable too: people try the big glowing words first.
+    label.userData = { kind: 'section', key }; giantMeshes.push(label);
     piece.position.y = 18; // waits in the sky for the intro drop
     giants[key] = { key, s, holder, piece, mat, ring, disk, label, lw, ly: label.position.y, phase: i * 1.3, H, baseEI: mat.emissiveIntensity };
   });
