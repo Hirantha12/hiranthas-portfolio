@@ -113,10 +113,10 @@ const toolsHTML = (mode) => `
 
 // The markup for one preview. `stageHTML` is what shows while the site loads (or if it can't).
 export function previewHTML(p, stageHTML) {
-  if (!p.url) {
+  if (!p.url) { // private project: no live site to show
     return `
   <div class="preview" style="--pc:${p.color}">
-    <div class="pv-bar"><i></i><i></i><i></i><span>private platform</span></div>
+    <div class="pv-bar"><i></i><i></i><i></i><span>${p.url ? host(p.url) : 'private platform'}</span></div>
     ${stageHTML}
   </div>`;
   }
