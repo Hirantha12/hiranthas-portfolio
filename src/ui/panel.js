@@ -31,6 +31,11 @@ function aboutHTML() {
 
 function experienceHTML() {
   return `
+  <button class="playcard" data-game="journey">
+    <span class="pc-k">♞ Knight's tour</span>
+    <b>Jump through my career</b>
+    <em>I'll show you how a knight moves, then jump across the plaza: six moves, six roles. Or just read the scoresheet below.</em>
+  </button>
   <p class="lead">My career as a scoresheet: six moves from intern to full stack engineer.</p>
   <ol class="moves">${MOVES.map((m) => `
     <li><div class="mv-n">${m.n}.<small>${m.ann || ''}</small></div><div>
