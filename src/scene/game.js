@@ -1,11 +1,13 @@
 // "Play for them": a real game against Hirantha on the plaza board.
 // The visitor plays Black, follows the arrow, presses their side of the chess clock, and each
-// move unlocks a project. Black's 8th move is checkmate (the Englund Gambit trap, see GAME).
+// move unlocks a project. Black's 9th move is checkmate. Every game uses a random opening trap
+// from src/data/games.js (14 of them, each checked with chess.js), never the same twice in a row.
 import * as THREE from 'three';
 import gsap from 'gsap';
 import { cnv, tex, neon } from './canvas.js';
 import { makePiece } from './pieces.js';
-import { GAME, PROJECTS } from '../data/content.js';
+import { PROJECTS } from '../data/content.js';
+import { pickGame } from '../data/games.js';
 import { Snd } from '../audio/sound.js';
 
 const BACK = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook'];
@@ -121,6 +123,18 @@ export function createGame({ scene, camera, board, boardTop, sqPos, ivory, ebony
   function movePiece(from, to, done) {
     const p = pieces.get(from), victim = pieces.get(to), b = at(to);
     pieces.delete(from); pieces.set(to, p); p.sq = to;
+    // Castling: the king moves two squares, so the rook jumps over to its other side.
+    if (p.type === 'king' && Math.abs(FILES.indexOf(to[0]) - FILES.indexOf(from[0])) === 2) {
+      const kingside = to[0] === 'g', rank = to[1];
+      const rFrom = (kingside ? 'h' : 'a') + rank, rTo = (kingside ? 'f' : 'd') + rank, rook = pieces.get(rFrom), rb = at(rTo);
+      if (rook) {
+        pieces.delete(rFrom); pieces.set(rTo, rook); rook.sq = rTo;
+        gsap.timeline({ delay: 0.25 * D })
+          .to(rook.g.position, { y: 0.45, duration: 0.18 * D, ease: 'power2.out' })
+          .to(rook.g.position, { x: rb.x, z: rb.z, duration: 0.42 * D, ease: 'power2.inOut' })
+          .to(rook.g.position, { y: 0, duration: 0.16 * D, ease: 'power2.in' });
+      }
+    }
     const tl = gsap.timeline({ onComplete: done });
     tl.to(p.g.position, { y: 0.45, duration: 0.18 * D, ease: 'power2.out' })
       .to(p.g.position, { x: b.x, z: b.z, duration: 0.42 * D, ease: 'power2.inOut' })
@@ -133,7 +147,7 @@ export function createGame({ scene, camera, board, boardTop, sqPos, ivory, ebony
   }
 
   /* ---------- the game ---------- */
-  let state = 'off', k = 0, selected = null, gen = 0, avatar = null;
+  let state = 'off', k = 0, selected = null, gen = 0, avatar = null, G = null; // G: this game's opening
   const timers = [];
   const later = (fn, ms) => timers.push(setTimeout(fn, ms * D));
   const color = () => PROJECTS[k].color; // the arrow takes the colour of the project it unlocks
@@ -146,6 +160,7 @@ export function createGame({ scene, camera, board, boardTop, sqPos, ivory, ebony
     vHand.visible = false; meet.position.y = MEET_Y;
     timers.forEach(clearTimeout); timers.length = 0;
     pieces.clear(); hideArrow(); selected = null; k = 0;
+    G = pickGame();
     all.forEach((p, i) => {
       gsap.killTweensOf([p.g.position, p.g.scale, p.g.rotation]);
       p.sq = p.home; pieces.set(p.sq, p);
@@ -161,7 +176,9 @@ export function createGame({ scene, camera, board, boardTop, sqPos, ivory, ebony
     clock.visible = true; clock.scale.setScalar(0.001);
     gsap.to(clock.scale, { x: 1, y: 1, z: 1, duration: 0.6 * D, delay: 0.8 * D, ease: 'back.out(1.5)' });
     state = 'start';
-    onChange({ phase: 'start' });
+    onChange({ phase: 'start', name: G.name, idea: G.idea });
+    // Pieces and clock are in place after about 2 s: the hand shows how to press the clock, once.
+    later(() => { if (state === 'start') { state = 'starting'; handPress(() => { press('b'); whiteTurn(); }); } }, 2600);
   }
 
   function exit() {
@@ -187,15 +204,15 @@ export function createGame({ scene, camera, board, boardTop, sqPos, ivory, ebony
     state = 'white'; running = 'w';
     onChange({ phase: 'thinking', k });
     if (avatar) avatar.think();
-    const [from, to] = GAME[k].white, g = gen;
+    const [from, to] = G.moves[k].white, g = gen;
     const yourTurn = () => {
       if (g !== gen) return; // the game was left or restarted meanwhile
       press('w');
-      const [bf, bt] = GAME[k].black;
+      const [bf, bt] = G.moves[k].black;
       showArrow(bf, bt, color());
       state = 'move';
       if (avatar) avatar.watchVisitor();
-      onChange({ phase: 'move', k, say: GAME[k].say, san: GAME[k].black[2] });
+      onChange({ phase: 'move', k, say: G.moves[k].say, san: G.moves[k].black[2] });
     };
     later(() => {
       const move = () => { if (g === gen) movePiece(from, to, afterMove); };
@@ -209,16 +226,16 @@ export function createGame({ scene, camera, board, boardTop, sqPos, ivory, ebony
   }
 
   function blackMove() {
-    const [from, to, san] = GAME[k].black, g = gen;
+    const [from, to, san] = G.moves[k].black, g = gen;
     const sharp = pieces.has(to) || san.includes('+'); // a capture or a check surprises him
     hideArrow(); selected = null; state = 'busy'; // the move animation lifts it from wherever it is
     movePiece(from, to, () => {
       if (g !== gen) return; // the game was left or restarted while the piece was moving
-      if (k === GAME.length - 1) { // checkmate: Hirantha's king tips over
+      if (k === G.moves.length - 1) { // checkmate: Hirantha's king tips over
         state = 'mate'; running = null; drawClock();
-        const king = pieces.get('e1');
+        const king = [...pieces.values()].find((p) => p.type === 'king' && p.white);
         gsap.to(king.g.rotation, { z: -1.45, duration: 0.9 * D, delay: 0.4 * D, ease: 'bounce.out', onStart: () => Snd.clack(0.6, 0.8) });
-        onChange({ phase: 'mate', k });
+        onChange({ phase: 'mate', k, name: G.name, san, line: G.line });
         // Sad, then a good sport about it: he offers a handshake across the board.
         if (avatar) avatar.lose(() => { if (g !== gen) return; avatar.offerHand(meet); state = 'handshake'; onChange({ phase: 'handshake' }); });
         return;
@@ -243,21 +260,39 @@ export function createGame({ scene, camera, board, boardTop, sqPos, ivory, ebony
   const vArm = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.065, 1, 14), holo);
   vHand.add(vPalm, vArm);
   const reach = { t: 0 };
-  const anchor = new THREE.Vector3(), handAt = new THREE.Vector3(), d3 = new THREE.Vector3();
+  const anchor = new THREE.Vector3(), handAt = new THREE.Vector3(), d3 = new THREE.Vector3(), aim = new THREE.Vector3();
+  let handTarget = 'meet'; // 'meet' for the handshake, 'clock' to press the visitor's clock button
+  const tap$ = { y: 0 };   // extra downward push while pressing the button
   function placeVisitorHand() {
     // shoulder point just below and right of the camera, so the arm comes from the visitor's side
     anchor.set(0.9, -0.85, -1.2).applyMatrix4(camera.matrixWorld);
-    handAt.copy(meet.position).add(d3.set(0, 0, 0.07));
+    if (handTarget === 'clock') { blackBtn.getWorldPosition(aim); aim.y += 0.1 - tap$.y; handAt.copy(aim); }
+    else { aim.copy(meet.position); handAt.copy(meet.position).add(d3.set(0, 0, 0.07)); }
     vPalm.position.lerpVectors(anchor, handAt, reach.t);
-    vPalm.lookAt(meet.position);
+    vPalm.lookAt(handTarget === 'clock' ? aim.setY(aim.y - 0.3) : aim);
     d3.subVectors(vPalm.position, anchor); const len = Math.max(d3.length(), 0.001);
     vArm.position.copy(anchor).addScaledVector(d3, 0.5); vArm.scale.set(1, len, 1);
     vArm.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d3.normalize());
   }
+  // The visitor's hand presses their clock button. The first press (starting the game) is done for
+  // them as a demonstration; after that it plays whenever they tap the clock, as feedback.
+  function handPress(onPress) {
+    const g = gen;
+    gsap.killTweensOf(reach); gsap.killTweensOf(tap$);
+    handTarget = 'clock'; vHand.visible = true; tap$.y = 0;
+    if (reach.t > 0.95) reach.t = 0.6;
+    gsap.timeline({ onComplete: () => { if (g === gen && handTarget === 'clock') vHand.visible = false; } })
+      .to(reach, { t: 1, duration: 0.45 * D, ease: 'power2.out' })
+      .to(tap$, { y: 0.06, duration: 0.07, ease: 'power2.in', onComplete: () => { if (g === gen) onPress(); } })
+      .to(tap$, { y: 0, duration: 0.12 })
+      .to(reach, { t: 0, duration: 0.4 * D, ease: 'power2.in' }, '+=0.15');
+  }
+
   function shake() {
     if (state !== 'handshake') return;
     state = 'shaking';
     const g = gen;
+    handTarget = 'meet'; gsap.killTweensOf(reach);
     reach.t = 0; vHand.visible = true; meet.position.y = MEET_Y;
     gsap.timeline({ onComplete: () => { if (g === gen) vHand.visible = false; } })
       .to(reach, { t: 1, duration: 0.6 * D, ease: 'power2.out' })
@@ -275,7 +310,7 @@ export function createGame({ scene, camera, board, boardTop, sqPos, ivory, ebony
     selected = null;
   }
   function nudge() {
-    const p = pieces.get(GAME[k].black[0]);
+    const p = pieces.get(G.moves[k].black[0]);
     gsap.fromTo(p.g.position, { x: p.g.position.x - 0.05 }, { x: at(p.sq).x, duration: 0.4, ease: 'elastic.out(1.4,.25)' });
     Snd.tick();
   }
@@ -294,15 +329,15 @@ export function createGame({ scene, camera, board, boardTop, sqPos, ivory, ebony
     if (!hits.length) return;
     const data = hits[0].object.userData;
     if (data.kind === 'gclock') {
-      if (state === 'start') { press('b'); whiteTurn(); }
+      if (state === 'start') { state = 'starting'; handPress(() => { press('b'); whiteTurn(); }); } // tapped before the demo
       else if (state === 'press') {
-        press('b'); onChange({ phase: 'project', k });
-        k++; later(whiteTurn, 900);
+        state = 'pressing'; // ignore extra taps while the hand presses
+        handPress(() => { press('b'); onChange({ phase: 'project', k }); k++; later(whiteTurn, 900); });
       }
       return;
     }
     if (state !== 'move') return;
-    const [from, to] = GAME[k].black;
+    const [from, to] = G.moves[k].black;
     const squares = hits.map((h) => squareOf(h.object.userData, h.point));
     if (squares.includes(to) && (selected || !squares.includes(from))) blackMove();
     else if (squares.includes(from)) select(pieces.get(from));
@@ -318,7 +353,7 @@ export function createGame({ scene, camera, board, boardTop, sqPos, ivory, ebony
     drawClock();
     pulse += dt;
     const glow = 0.45 + 0.45 * Math.sin(pulse * 5);
-    const yourPress = state === 'start' || state === 'press';
+    const yourPress = state === 'press';
     blackBtn.material.emissiveIntensity = yourPress ? glow : 0;
     pointer.visible = yourPress;
     if (yourPress) pointer.position.y = 0.6 + Math.abs(Math.sin(pulse * 4)) * 0.12;
