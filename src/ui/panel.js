@@ -1,6 +1,7 @@
 // The side panel ("scoresheet") that opens for each section.
 import gsap from 'gsap';
 import { SECTIONS, PROJECTS, MOVES, SKILLS, GLYPH, PIECE_NAME, PROFILE } from '../data/content.js';
+import { previewHTML, mountPreviews, previewClick, parkPreviews, preconnect, warm } from './preview.js';
 
 const host = (u) => u.replace(/^https?:\/\//, '').replace(/\/$/, '');
 const isDesktop = () => innerWidth > 860;
@@ -84,16 +85,17 @@ function projectHTML(i) {
 // The project itself, shared by the list view and the game.
 function projectCore(i) {
   const p = PROJECTS[i];
+  // Shown while the live site loads, and for private projects (a screenshot if there is one).
   const stage = p.image
     ? `<div class="pv-stage has-img"><img src="${p.image}" alt="Screenshot of ${p.name}"></div>`
     : `<div class="pv-stage"><span class="sqb">${p.sq}</span><span class="big">${GLYPH[p.piece]}</span><span class="nm">${p.name}</span></div>`;
   return `
-  <div class="preview" style="--pc:${p.color}">
-    <div class="pv-bar"><i></i><i></i><i></i><span>${p.url ? host(p.url) : 'private platform'}</span></div>
-    ${stage}
-  </div>
+  ${previewHTML(p, stage)}
   <p class="ctx">${p.kind} · ${p.ctx}</p>
   <p>${p.desc}</p>
+  ${p.role ? `<h3>My role</h3><p>${p.role}</p>` : ''}
+  ${p.highlights && p.highlights.length ? `<h3>Key features</h3><ul class="hl">${p.highlights.map((h) => `<li>${h}</li>`).join('')}</ul>` : ''}
+  ${p.result ? `<h3>Result</h3><p class="note">${p.result}</p>` : ''}
   <h3>Built with</h3>
   <div class="chips">${p.stack.map((s) => `<span>${s}</span>`).join('')}</div>
   <div class="actions">${p.url ? `<a class="btn" href="${p.url}" target="_blank" rel="noopener">Visit live site ↗</a>` : '<span class="muted">Private client platform, so there is no public link.</span>'}</div>`;
@@ -139,6 +141,7 @@ export function createPanel({ onSelectProject, getActiveProject, onGame }) {
 
   function render(key) {
     const s = SECTIONS[key], active = getActiveProject();
+    parkPreviews(body); // keep any loaded project site alive for a quick return
     panel.style.setProperty('--sec', s.color);
     document.querySelector('#pGlyph').textContent = GLYPH[s.piece];
     document.querySelector('#pEyebrow').textContent = `${PIECE_NAME[s.piece]} · ${s.sq} — ${key === 'about' ? 'About me' : s.title}`;
@@ -150,6 +153,8 @@ export function createPanel({ onSelectProject, getActiveProject, onGame }) {
       : key === 'contact' ? contactHTML()
       : active >= 0 ? projectHTML(active) : projectsListHTML();
     body.scrollTop = 0;
+    mountPreviews(body);
+    if (key === 'projects') preconnect(PROJECTS.map((p) => p.url));
   }
 
   function open(key) {
@@ -162,6 +167,7 @@ export function createPanel({ onSelectProject, getActiveProject, onGame }) {
     document.querySelector('#pGlyph').textContent = glyph;
     document.querySelector('#pEyebrow').textContent = eyebrow;
     document.querySelector('#pTitle').textContent = title;
+    parkPreviews(body);
     body.innerHTML = html; body.scrollTop = 0;
     reveal();
     return body;
@@ -196,6 +202,7 @@ export function createPanel({ onSelectProject, getActiveProject, onGame }) {
     unlocked = 0;
     document.querySelector('#pEyebrow').textContent = 'Projects — playing Black';
     document.querySelector('#pTitle').textContent = 'Beat me in 8 moves';
+    parkPreviews(body);
     body.innerHTML = `
       <div class="gstat"><div class="gtop">${dots(0)}<button class="btn-sm" data-game="exit">Exit game</button></div><p id="gStat"></p></div>
       <div id="gCard">${gameIntroHTML()}</div>`;
@@ -206,21 +213,40 @@ export function createPanel({ onSelectProject, getActiveProject, onGame }) {
     const stat = body.querySelector('#gStat'), card = body.querySelector('#gCard');
     if (!stat) return;
     stat.innerHTML = gameStatus(info);
+    // While the player makes their move and presses the clock, start loading the project it unlocks.
+    if (info.phase === 'move') warm(PROJECTS[info.k].url, PROJECTS[info.k].name);
     if (info.phase === 'project' || info.phase === 'mate') {
       unlocked = info.k + 1;
       body.querySelector('.gdots').outerHTML = dots(unlocked);
       document.querySelector('#pTitle').textContent = PROJECTS[info.k].name;
+      parkPreviews(card);
       card.innerHTML = (info.phase === 'mate' ? winHTML() : '') + `<p class="gnew">Project ${unlocked} of ${PROJECTS.length} unlocked</p>` + projectCore(info.k);
+      mountPreviews(card);
       body.scrollTop = 0;
       gsap.fromTo(card, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4 });
     }
     if (info.phase === 'project') stat.innerHTML = `<span class="gk">Project ${unlocked} / ${PROJECTS.length}</span> Read on, or wait for Hirantha's next move.`;
   }
 
+  // Hovering a project in the list starts loading its site (after a short pause, so moving the
+  // mouse across the list doesn't load all of them).
+  let hoverT = 0;
+  body.addEventListener('pointerover', (e) => {
+    const it = e.target.closest('.pitem, .pager button'); if (!it) return;
+    clearTimeout(hoverT);
+    hoverT = setTimeout(() => {
+      const n = PROJECTS.length;
+      const i = it.dataset.i !== undefined ? +it.dataset.i : it.dataset.step ? (getActiveProject() + +it.dataset.step + n) % n : -1;
+      if (i >= 0) warm(PROJECTS[i].url, PROJECTS[i].name);
+    }, 180);
+  });
+  body.addEventListener('pointerout', () => clearTimeout(hoverT));
+
   body.addEventListener('click', (e) => {
     const t = e.target.closest('button');
     if (!t) return;
     const n = PROJECTS.length;
+    if (previewClick(t)) return; // Desktop / Mobile / Expand on a live project preview
     if (t.dataset.game) onGame(t.dataset.game);
     else if (t.dataset.i !== undefined) onSelectProject(+t.dataset.i);
     else if (t.hasAttribute('data-list')) onSelectProject(-1);
