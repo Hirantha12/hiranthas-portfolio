@@ -20,6 +20,7 @@ import { Snd } from './audio/sound.js';
 import { setMaxAnisotropy } from './scene/canvas.js';
 import { buildWorld, P } from './scene/world.js';
 import { createGame } from './scene/game.js';
+import { createJourney } from './scene/journey.js';
 import { createPanel } from './ui/panel.js';
 import { createChat } from './ui/chat.js';
 import { warm } from './ui/preview.js';
@@ -162,7 +163,8 @@ function start(autoStart) {
     const dist = Math.max((tall ? 3.3 : 3.25) / Math.tan(halfW), tall ? 0 : 2.45 / tanV), el = THREE.MathUtils.degToRad(tall ? 52 : 34);
     return { pos: new V3(tgt.x, tgt.y + dist * Math.sin(el), tgt.z + dist * Math.cos(el)), tgt };
   }
-  const viewFor = (m) => (m === 'home' ? homeView() : m === 'talk' ? framed(talkView()) : m === 'projects' && game.active ? framed(gameView()) : framed(sectionView(m)));
+  const viewFor = (m) => (m === 'home' ? homeView() : m === 'talk' ? framed(talkView()) : m === 'projects' && game.active ? framed(gameView())
+    : m === 'experience' && journey.active ? framed(journey.view()) : framed(sectionView(m)));
   function flyTo(v, dur, ease) {
     gsap.to(cam, { px: v.pos.x, py: v.pos.y, pz: v.pos.z, tx: v.tgt.x, ty: v.tgt.y, tz: v.tgt.z, duration: REDUCE ? Math.min(dur, 0.8) : dur, ease: ease || 'power3.inOut', overwrite: true });
   }
@@ -178,7 +180,9 @@ function start(autoStart) {
   const panel = createPanel({
     onSelectProject: (i) => selectProject(i), getActiveProject: () => activeProject,
     onGame: (action) => {
-      if (action === 'play' || action === 'replay') startGame();
+      if (action === 'journey') startJourney();
+      else if (action.startsWith('j-')) journey.action(action);
+      else if (action === 'play' || action === 'replay') startGame();
       else if (action === 'exit') exitGame();
       else if (action === 'contact') goTo('contact');
       else if (action === 'shake') game.shake();
@@ -198,6 +202,22 @@ function start(autoStart) {
 
   // "Ask Hirantha": click him in the kiosk to talk (see src/ui/chat.js and api/ask.js).
   const chat = createChat({ panel, onTalk: (on) => hirantha && hirantha.talk(on) });
+
+  // "Knight's tour" (Experience): Hirantha jumps across the plaza floor, one role per knight move.
+  const journey = createJourney({
+    scene, panel, reduce: REDUCE, getAvatar: () => hirantha,
+    scale: () => Math.min(portraitK(), 1.6),
+    onCamera: (v, dur) => flyTo(framed(v), dur),
+    onExit: () => { if (mode !== 'experience') return; resetOrbit(); panel.open('experience'); flyTo(framed(sectionView('experience')), 1.6); },
+  });
+  function startJourney() {
+    if (mode !== 'experience') return;
+    loadAvatar(); resetOrbit(); clearHover();
+    // he arrives with a lazy import a moment after START; wait for him briefly if needed
+    let tries = 0;
+    const go = () => { if (hirantha || tries++ > 15) journey.start(); else setTimeout(go, 200); };
+    go();
+  }
   // His name tag: a page element pinned to a point above his head, so it stays readable from
   // the main view. Shown only on the board view while he's coding and the shop faces the camera.
   // It scales with the scene (full size when the kiosk looks as big as on a large monitor) and
@@ -323,7 +343,7 @@ function start(autoStart) {
     document.body.classList.toggle('home', mode === 'home');
   }
   // Drag to orbit, scroll or pinch to zoom: on the board and in Projects (including the game).
-  const canOrbit = () => mode === 'home' || mode === 'projects';
+  const canOrbit = () => mode === 'home' || mode === 'projects' || (mode === 'experience' && journey.active);
   function resetOrbit() { yawVel = 0; yawTarget = Math.round(yaw / (Math.PI * 2)) * Math.PI * 2; pitchTarget = 0; zoomTarget = 1; }
   function goTo(key) {
     if (mode === 'intro' || key === mode) return;
@@ -331,6 +351,7 @@ function start(autoStart) {
     Snd.tick(); resetOrbit(); clearHover(); updateDock();
     if (prev === 'projects') { if (game.active) { game.exit(); document.body.classList.remove('in-game'); } boardToDecor(); }
     if (prev === 'talk') { chat.close(); if (hirantha) hirantha.chatMode(false); }
+    if (prev === 'experience' && journey.active) journey.exit(false);
     if (key === 'talk') {
       flyTo(framed(talkView()), 1.8);
       chat.open(); hirantha.chatMode(true);
@@ -348,7 +369,7 @@ function start(autoStart) {
   $('#pClose').addEventListener('click', () => goTo('home'));
   addEventListener('keydown', (e) => {
     if (mode === 'intro') return;
-    if (e.key === 'Escape') { if (game.active) exitGame(); else if (mode === 'projects' && activeProject >= 0) selectProject(-1); else goTo('home'); }
+    if (e.key === 'Escape') { if (journey.active) journey.exit(true); else if (game.active) exitGame(); else if (mode === 'projects' && activeProject >= 0) selectProject(-1); else goTo('home'); }
     if (mode === 'projects' && !game.active && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
       const d = e.key === 'ArrowRight' ? 1 : -1, n = PROJECTS.length;
       selectProject(activeProject < 0 ? (d > 0 ? 0 : n - 1) : (activeProject + d + n) % n);
@@ -370,7 +391,7 @@ function start(autoStart) {
   function pickAll() {
     if (mode === 'intro') return [];
     ray.setFromCamera(ndc, camera);
-    const list = mode === 'projects' ? (game.active ? game.pickList() : projMeshes) : mode === 'home' ? giantMeshes.concat(sheetMeshes, hirantha ? hirantha.pickMeshes : []) : giantMeshes;
+    const list = mode === 'experience' && journey.active ? journey.pickList() : mode === 'projects' ? (game.active ? game.pickList() : projMeshes) : mode === 'home' ? giantMeshes.concat(sheetMeshes, hirantha ? hirantha.pickMeshes : []) : giantMeshes;
     return ray.intersectObjects(list, false);
   }
   function pick() { const hit = pickAll()[0]; return hit ? hit.object.userData : null; }
@@ -458,7 +479,10 @@ function start(autoStart) {
       if (now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40) { resetOrbit(); lastTap.t = 0; }
       else lastTap = { t: now, x: e.clientX, y: e.clientY };
     };
-    if (down && !dragging && !cancelled && game.active && mode === 'projects') {
+    if (down && !dragging && !cancelled && journey.active && mode === 'experience') {
+      setNdc(e); const hits = pickAll();
+      if (hits.length) journey.tap(hits); else doubleTap();
+    } else if (down && !dragging && !cancelled && game.active && mode === 'projects') {
       setNdc(e); const hits = pickAll();
       if (hits.length) game.tap(hits); else doubleTap();
     } else if (down && !dragging && !cancelled) {
@@ -631,10 +655,11 @@ function start(autoStart) {
     codeT += dt; if (codeT > 0.07) { W.drawCode(codeT); codeT = 0; }
     if (ptrMoved && !TOUCH && !down) {
       ptrMoved = false;
-      if (game.active && mode === 'projects') canvas.style.cursor = pick() ? 'pointer' : 'default';
+      if ((game.active && mode === 'projects') || (journey.active && mode === 'experience')) canvas.style.cursor = pick() ? 'pointer' : 'default';
       else setHover(pick());
     }
     game.update(dt);
+    journey.update(dt);
     placeNameTag();
     W.stringLights.visible = !game.active && mode !== 'talk'; // from the visitor's seat they'd hang right over his face
 
