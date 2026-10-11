@@ -324,3 +324,12 @@ ul.hl li::marker{color:var(--sec)}
 .gcall.pulse{animation:gcall 1.4s ease-in-out infinite}
 @keyframes gcall{50%{box-shadow:0 0 2px color-mix(in srgb,var(--mint) 30%,transparent);filter:brightness(.9)}}
 @media (prefers-reduced-motion:reduce){.gcall.pulse{animation:none}}
+
+/* Knight's tour (Experience game mode) */
+.jrules{list-style:none;margin:0 0 16px;padding:0;display:grid;gap:6px}
+.jrules li{padding:8px 12px;border:1px solid var(--line);font-size:13.5px;color:var(--muted);transition:all .3s}
+.jrules li.on{color:var(--cream);border-color:var(--amber);background:rgba(255,181,71,.08);box-shadow:inset 3px 0 0 var(--amber)}
+.jrole{margin:0 0 14px;padding:14px 16px;border:1px solid var(--line);border-top:3px solid var(--pc);background:rgba(255,255,255,.02)}
+.jrole .ctx{color:var(--pc)!important;margin:0 0 6px!important}
+.jrole .jt{margin:0 0 2px;font-size:19px;font-weight:700;color:var(--cream);line-height:1.25}
+.jrole p:last-child{margin:8px 0 0}
