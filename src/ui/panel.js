@@ -61,10 +61,10 @@ function projectsListHTML() {
   return `
   <button class="playcard" data-game="play">
     <span class="pc-k">♚ Play for them</span>
-    <b>Beat me in 8 moves</b>
-    <em>Sit at the board as Black. Every move you make unlocks a project, and move 8 is checkmate.</em>
+    <b>Beat me in ${PROJECTS.length} moves</b>
+    <em>Sit at the board as Black. Every move you make unlocks a project, and move ${PROJECTS.length} is checkmate. A different opening trap every game.</em>
   </button>
-  <p class="lead">Eight projects, set up on the first rank. Pick a piece on the board or a project below.</p>
+  <p class="lead">My projects, set up on the board: eight on the first rank, and this portfolio as the e2 pawn. Pick a piece or a project below.</p>
   <ol class="plist">${PROJECTS.map((p, i) => `
     <li><button class="pitem" data-i="${i}" style="--pc:${p.color}"><span class="sq">${p.sq}</span><span class="pg">${GLYPH[p.piece]}</span><span class="pt"><b>${p.name}</b><em>${p.kind}</em></span><span class="ar">→</span></button></li>`).join('')}
   </ol>`;
@@ -107,11 +107,11 @@ const dots = (unlocked) => `<span class="gdots">${PROJECTS.map((p, i) => `<i sty
 function gameStatus(info) {
   const n = PROJECTS.length;
   switch (info.phase) {
-    case 'start': return `<b>You play Black.</b> Press <em>your</em> side of the clock (on the right of the board) to start the game.`;
+    case 'start': return `<span class="gk">Opening: ${info.name}</span> ${info.idea} <span class="gcall">You play Black. Starting the clock…</span>`;
     case 'thinking': return `<span class="gk">Move ${info.k + 1} / ${n}</span> Hirantha is thinking…`;
-    case 'move': return `<span class="gk">Move ${info.k + 1} / ${n}</span> ${info.say} Play <b>${info.san}</b>: tap the glowing piece, then its square.`;
-    case 'press': return `<span class="gk">Move ${info.k + 1} / ${n}</span> Good move. Now <b>press your clock</b> to reveal project ${info.k + 1}.`;
-    case 'mate': return `<b>Checkmate!</b> You beat Hirantha in ${n} moves.`;
+    case 'move': return `<span class="gk">Move ${info.k + 1} / ${n}</span> ${info.say} <span class="gcall">Play ${info.san}: tap the piece, then its square</span>`;
+    case 'press': return `<span class="gk">Move ${info.k + 1} / ${n}</span> <span class="gcall pulse">⏱ Press your clock</span> to unlock project ${info.k + 1}.`;
+    case 'mate': return `<b>Checkmate!</b> You beat Hirantha in ${n} moves with the ${info.name}.`;
     case 'handshake': return `<b>Checkmate!</b> Hirantha offers you his hand. <button class="btn shake" data-game="shake">🤝 Shake hands</button>`;
     case 'gg': return `<b>Good game!</b> Thanks for playing, and for reading through my projects.`;
     default: return '';
@@ -119,19 +119,20 @@ function gameStatus(info) {
 }
 
 const gameIntroHTML = () => `
-  <p class="lead">Eight moves, eight projects.</p>
+  <p class="lead">${PROJECTS.length} moves, ${PROJECTS.length} projects.</p>
   <ol class="ghow">
     <li>Hirantha (White) moves and presses his clock.</li>
     <li>Follow the arrow: tap the piece, then the square.</li>
-    <li>Press your clock to reveal the next project.</li>
+    <li>Press your clock (on the right) to unlock a project.</li>
   </ol>
   <p class="muted">Drag to look around the board, scroll or pinch to zoom, double-click or double-tap to reset.</p>
-  <p class="muted">Move 8 is checkmate. Prefer to just read? Exit any time.</p>`;
+  <p class="muted">Move ${PROJECTS.length} is checkmate. Each game uses a different opening trap. Prefer to just read? Exit any time.</p>`;
 
-const winHTML = () => `
+const winHTML = (info) => `
   <div class="gwin">
     <b>You found the mate.</b>
-    <p>That was the Englund Gambit trap: 8…Qc1#. If you play this sharp at work too, let's talk.</p>
+    <p>That was the ${info.name}: ${PROJECTS.length}${info.san}. If you play this sharp at work too, let's talk.</p>
+    <p class="gline">${info.line}</p>
     <div class="actions"><button class="btn" data-game="contact">Contact me</button><button class="btn ghost" data-game="replay">Play again</button></div>
   </div>`;
 
@@ -201,7 +202,7 @@ export function createPanel({ onSelectProject, getActiveProject, onGame }) {
   function startGame() {
     unlocked = 0;
     document.querySelector('#pEyebrow').textContent = 'Projects — playing Black';
-    document.querySelector('#pTitle').textContent = 'Beat me in 8 moves';
+    document.querySelector('#pTitle').textContent = `Beat me in ${PROJECTS.length} moves`;
     parkPreviews(body);
     body.innerHTML = `
       <div class="gstat"><div class="gtop">${dots(0)}<button class="btn-sm" data-game="exit">Exit game</button></div><p id="gStat"></p></div>
@@ -220,7 +221,7 @@ export function createPanel({ onSelectProject, getActiveProject, onGame }) {
       body.querySelector('.gdots').outerHTML = dots(unlocked);
       document.querySelector('#pTitle').textContent = PROJECTS[info.k].name;
       parkPreviews(card);
-      card.innerHTML = (info.phase === 'mate' ? winHTML() : '') + `<p class="gnew">Project ${unlocked} of ${PROJECTS.length} unlocked</p>` + projectCore(info.k);
+      card.innerHTML = (info.phase === 'mate' ? winHTML(info) : '') + `<p class="gnew">Project ${unlocked} of ${PROJECTS.length} unlocked</p>` + projectCore(info.k);
       mountPreviews(card);
       body.scrollTop = 0;
       gsap.fromTo(card, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4 });
