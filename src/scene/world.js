@@ -97,7 +97,11 @@ export function buildWorld(scene, { touch, reduce }) {
     const H = HEIGHT[s.piece] * s.scale;
     const lw = key === 'about' ? 4.6 : 3.3;
     const label = labelSprite(s.label, `${GLYPH[s.piece]} ${PIECE_NAME[s.piece].toUpperCase()} · ${s.sq}`, s.color, lw);
-    label.position.y = H + (key === 'about' ? 1.2 : 0.85); holder.add(label);
+    // Experience and Skills (the outer pieces) float higher, so from the front their labels
+    // don't run into Projects and Contact.
+    label.position.y = H + (key === 'about' ? 1.2 : key === 'experience' || key === 'skills' ? 1.75 : 0.85); holder.add(label);
+    // The floating name is clickable too: people try the big glowing words first.
+    label.userData = { kind: 'section', key }; giantMeshes.push(label);
     piece.position.y = 18; // waits in the sky for the intro drop
     giants[key] = { key, s, holder, piece, mat, ring, disk, label, lw, ly: label.position.y, phase: i * 1.3, H, baseEI: mat.emissiveIntensity };
   });
@@ -296,11 +300,16 @@ export function buildWorld(scene, { touch, reduce }) {
   });
 
   const projPieces = PROJECTS.map((pr, i) => {
-    const mat = new THREE.MeshStandardMaterial({ color: 0xd2c9b8, roughness: 0.3, metalness: 0.1, emissive: new THREE.Color(pr.color), emissiveIntensity: 0.18 });
-    const holder = new THREE.Group(); holder.position.copy(sqPos(i, 0)); holder.position.y = -0.4; holder.scale.setScalar(0.001); holder.visible = false; board.add(holder);
+    // Matte ivory with only a hint of the project colour, so no piece blows out under the bloom.
+    // The selected piece is marked by its glowing ring and square (see setActive in main.js).
+    const mat = new THREE.MeshStandardMaterial({ color: 0xbdb4a4, roughness: 0.55, metalness: 0, emissive: new THREE.Color(pr.color), emissiveIntensity: 0.05 });
+    const holder = new THREE.Group(); holder.position.copy(sqPos('abcdefgh'.indexOf(pr.sq[0]), +pr.sq[1] - 1)); holder.position.y = -0.4; holder.scale.setScalar(0.001); holder.visible = false; board.add(holder);
     const inner = makePiece(pr.piece, mat); if (pr.piece === 'knight') inner.rotation.y = -Math.PI / 2; holder.add(inner);
     const meshes = []; inner.traverse((o) => { if (o.isMesh) { o.userData = { kind: 'proj', i }; meshes.push(o); } });
-    return { holder, inner, mat, meshes, baseRot: inner.rotation.y };
+    // a thin neon ring around the base, shown when the piece is hovered or selected
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.02, 8, 64), new THREE.MeshBasicMaterial({ color: new THREE.Color(pr.color), transparent: true, opacity: 0, depthWrite: false }));
+    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03; holder.add(ring);
+    return { holder, inner, mat, meshes, ring, baseRot: inner.rotation.y };
   });
   const projMeshes = projPieces.flatMap((p) => p.meshes);
   const hl = new THREE.Mesh(new THREE.PlaneGeometry(0.48, 0.48), new THREE.MeshBasicMaterial({ color: 0xff3d9a, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false }));

@@ -20,8 +20,10 @@ import { Snd } from './audio/sound.js';
 import { setMaxAnisotropy } from './scene/canvas.js';
 import { buildWorld, P } from './scene/world.js';
 import { createGame } from './scene/game.js';
+import { createJourney } from './scene/journey.js';
 import { createPanel } from './ui/panel.js';
 import { createChat } from './ui/chat.js';
+import { warm } from './ui/preview.js';
 
 // Colour setup: this matches the look of the original r128 prototype (linear, no colour
 // conversion). When you move to baked Blender textures, switch to the modern pipeline:
@@ -43,9 +45,21 @@ const fontsReady = Promise.race([
   new Promise((r) => setTimeout(r, 3500)),
 ]).catch(() => {});
 
-fontsReady.then(start);
+// Shown inside another page (for example as the live preview in its own Projects panel): wait
+// for START before building the 3D board, so the preview costs almost nothing until asked.
+const EMBEDDED = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+if (EMBEDDED) {
+  const btn = $('#startBtn');
+  document.body.classList.add('embedded');
+  btn.disabled = false;
+  stLoad.innerHTML = '<b>Live preview.</b> Press START to load the 3D board';
+  btn.addEventListener('click', () => {
+    btn.disabled = true; stLoad.textContent = 'Setting up the board…';
+    fontsReady.then(() => start(true));
+  }, { once: true });
+} else fontsReady.then(() => start(false));
 
-function start() {
+function start(autoStart) {
   const canvas = $('#c');
   let renderer;
   try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' }); }
@@ -149,7 +163,8 @@ function start() {
     const dist = Math.max((tall ? 3.3 : 3.25) / Math.tan(halfW), tall ? 0 : 2.45 / tanV), el = THREE.MathUtils.degToRad(tall ? 52 : 34);
     return { pos: new V3(tgt.x, tgt.y + dist * Math.sin(el), tgt.z + dist * Math.cos(el)), tgt };
   }
-  const viewFor = (m) => (m === 'home' ? homeView() : m === 'talk' ? framed(talkView()) : m === 'projects' && game.active ? framed(gameView()) : framed(sectionView(m)));
+  const viewFor = (m) => (m === 'home' ? homeView() : m === 'talk' ? framed(talkView()) : m === 'projects' && game.active ? framed(gameView())
+    : m === 'experience' && journey.active ? framed(journey.view()) : framed(sectionView(m)));
   function flyTo(v, dur, ease) {
     gsap.to(cam, { px: v.pos.x, py: v.pos.y, pz: v.pos.z, tx: v.tgt.x, ty: v.tgt.y, tz: v.tgt.z, duration: REDUCE ? Math.min(dur, 0.8) : dur, ease: ease || 'power3.inOut', overwrite: true });
   }
@@ -165,7 +180,9 @@ function start() {
   const panel = createPanel({
     onSelectProject: (i) => selectProject(i), getActiveProject: () => activeProject,
     onGame: (action) => {
-      if (action === 'play' || action === 'replay') startGame();
+      if (action === 'journey') startJourney();
+      else if (action.startsWith('j-')) journey.action(action);
+      else if (action === 'play' || action === 'replay') startGame();
       else if (action === 'exit') exitGame();
       else if (action === 'contact') goTo('contact');
       else if (action === 'shake') game.shake();
@@ -185,6 +202,63 @@ function start() {
 
   // "Ask Hirantha": click him in the kiosk to talk (see src/ui/chat.js and api/ask.js).
   const chat = createChat({ panel, onTalk: (on) => hirantha && hirantha.talk(on) });
+
+  // "Knight's tour" (Experience): Hirantha jumps across the plaza floor, one role per knight move.
+  const journey = createJourney({
+    scene, panel, reduce: REDUCE, getAvatar: () => hirantha,
+    scale: () => Math.min(portraitK(), 1.6),
+    onCamera: (v, dur) => flyTo(framed(v), dur),
+    onExit: () => { if (mode !== 'experience') return; resetOrbit(); panel.open('experience'); flyTo(framed(sectionView('experience')), 1.6); },
+  });
+  function startJourney() {
+    if (mode !== 'experience') return;
+    loadAvatar(); resetOrbit(); clearHover();
+    // he arrives with a lazy import a moment after START; wait for him briefly if needed
+    let tries = 0;
+    const go = () => { if (hirantha || tries++ > 15) journey.start(); else setTimeout(go, 200); };
+    go();
+  }
+  // His name tag: a page element pinned to a point above his head, so it stays readable from
+  // the main view. Shown only on the board view while he's coding and the shop faces the camera.
+  // It scales with the scene (full size when the kiosk looks as big as on a large monitor) and
+  // switches to a small one-line tag on tablets and phones, so it never covers the shop's sign.
+  // The scoresheet gets the same kind of tag ("My story"), so visitors can tell it opens too.
+  const hTag = $('#hTag'), sTag = $('#sTag'), tagPos = new V3(), tagTop = new V3(), kioskAt = new V3(0.5, 2.1, -4.1);
+  const TAG_FULL_PPM = 56; // pixels per metre at the kiosk on a 1845px-wide screen
+  hTag.addEventListener('click', () => goTo('talk'));
+  sTag.addEventListener('click', () => goTo('about'));
+  let sheetBobbed = false;
+  // Pins a tag to a world point. `anchor` is the CSS offset of the tag from that point.
+  function pinTag(el, at, anchor, size) {
+    tagPos.copy(at).project(camera);
+    if (tagPos.z > 1 || Math.abs(tagPos.x) > 1.05 || Math.abs(tagPos.y) > 1.05) { el.hidden = true; return; }
+    el.classList.toggle('compact', size.compact);
+    const x = Math.min(innerWidth - 8, Math.max(8, ((tagPos.x + 1) / 2) * innerWidth)); // keep it on screen
+    el.style.transform = `translate(${x}px, ${((1 - tagPos.y) / 2) * innerHeight}px) ${anchor} scale(${size.scale.toFixed(3)})`;
+    el.hidden = false;
+  }
+  function placeNameTag() {
+    const board = mode === 'home' && document.body.classList.contains('ready');
+    if (!board) { hTag.hidden = sTag.hidden = true; return; }
+    // Size from how big the kiosk looks: full size on large screens, a one-line tag on tablets/phones.
+    tagPos.copy(kioskAt).project(camera);
+    const k = (Math.abs(tagTop.copy(kioskAt).setY(kioskAt.y + 1).project(camera).y - tagPos.y) * innerHeight / 2) / TAG_FULL_PPM;
+    const size = { compact: k < 0.7, scale: k < 0.7 ? 1 : Math.min(1, k) };
+
+    const at = hirantha ? hirantha.nameTag() : null;
+    if (at && camera.position.z > at.z + 1) pinTag(hTag, at, 'translate(-100%, -50%)', size); // left of him
+    else hTag.hidden = true;
+
+    // top edge of the clipboard; hidden when orbiting round to its back
+    sheetMeshes[1].getWorldPosition(tagTop).y += 0.25;
+    if (camera.position.z > tagTop.z - 1) {
+      pinTag(sTag, tagTop, 'translate(-50%, -100%)', size);
+      if (!sheetBobbed && !sTag.hidden) { // one gentle bob the first time, to draw the eye
+        sheetBobbed = true;
+        gsap.to(sheet.tilt.position, { y: 1.12, duration: 0.45, delay: 0.6, yoyo: true, repeat: 1, ease: 'sine.inOut' });
+      }
+    } else sTag.hidden = true;
+  }
   // Camera in front of the counter, looking at him at his laptop.
   // (on tall phones it comes in closer, over the counter, so the chessboard isn't in the way)
   const talkView = () => { const tgt = new V3(1.3, 2.0, -4.25); return { pos: tgt.clone().add(camera.aspect < 1 ? new V3(-0.3, 0.95, 3.1) : new V3(-0.7, 0.75, 5.4)), tgt }; };
@@ -192,7 +266,7 @@ function start() {
   function startGame() {
     if (mode !== 'projects') return;
     loadAvatar();
-    if (!game.active) { // swap the eight project pieces for a full set
+    if (!game.active) { // swap the project pieces for a full set
       setActive(-1);
       projPieces.forEach((pp, i) => {
         gsap.to(pp.holder.position, { y: -0.4, duration: 0.35, delay: i * 0.03, ease: 'power2.in', overwrite: true });
@@ -242,13 +316,14 @@ function start() {
   function setActive(i) {
     activeProject = i;
     projPieces.forEach((pp, j) => {
-      gsap.to(pp.inner.position, { y: j === i ? 0.3 : 0, duration: 0.5, ease: 'power3.out' });
-      gsap.to(pp.mat, { emissiveIntensity: j === i ? 0.9 : 0.18, duration: 0.4 });
+      gsap.to(pp.inner.position, { y: j === i ? 0.2 : 0, duration: 0.5, ease: 'power3.out' });
+      gsap.to(pp.mat, { emissiveIntensity: j === i ? 0.1 : 0.05, duration: 0.4 }); // a soft tint, never a glare
+      gsap.to(pp.ring.material, { opacity: j === i ? 1 : 0, duration: 0.3 });
     });
     if (i >= 0) {
       const pp = projPieces[i];
       gsap.fromTo(pp.inner.rotation, { y: pp.baseRot }, { y: pp.baseRot + Math.PI * 2, duration: REDUCE ? 0 : 1.1, ease: 'power2.out' });
-      const p = sqPos(i, 0); hl.position.x = p.x; hl.position.z = p.z;
+      const sq = PROJECTS[i].sq, p = sqPos('abcdefgh'.indexOf(sq[0]), +sq[1] - 1); hl.position.x = p.x; hl.position.z = p.z;
       hl.material.color.set(PROJECTS[i].color); hl.visible = true;
     } else hl.visible = false;
   }
@@ -268,7 +343,7 @@ function start() {
     document.body.classList.toggle('home', mode === 'home');
   }
   // Drag to orbit, scroll or pinch to zoom: on the board and in Projects (including the game).
-  const canOrbit = () => mode === 'home' || mode === 'projects';
+  const canOrbit = () => mode === 'home' || mode === 'projects' || (mode === 'experience' && journey.active);
   function resetOrbit() { yawVel = 0; yawTarget = Math.round(yaw / (Math.PI * 2)) * Math.PI * 2; pitchTarget = 0; zoomTarget = 1; }
   function goTo(key) {
     if (mode === 'intro' || key === mode) return;
@@ -276,6 +351,7 @@ function start() {
     Snd.tick(); resetOrbit(); clearHover(); updateDock();
     if (prev === 'projects') { if (game.active) { game.exit(); document.body.classList.remove('in-game'); } boardToDecor(); }
     if (prev === 'talk') { chat.close(); if (hirantha) hirantha.chatMode(false); }
+    if (prev === 'experience' && journey.active) journey.exit(false);
     if (key === 'talk') {
       flyTo(framed(talkView()), 1.8);
       chat.open(); hirantha.chatMode(true);
@@ -293,7 +369,7 @@ function start() {
   $('#pClose').addEventListener('click', () => goTo('home'));
   addEventListener('keydown', (e) => {
     if (mode === 'intro') return;
-    if (e.key === 'Escape') { if (game.active) exitGame(); else if (mode === 'projects' && activeProject >= 0) selectProject(-1); else goTo('home'); }
+    if (e.key === 'Escape') { if (journey.active) journey.exit(true); else if (game.active) exitGame(); else if (mode === 'projects' && activeProject >= 0) selectProject(-1); else goTo('home'); }
     if (mode === 'projects' && !game.active && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
       const d = e.key === 'ArrowRight' ? 1 : -1, n = PROJECTS.length;
       selectProject(activeProject < 0 ? (d > 0 ? 0 : n - 1) : (activeProject + d + n) % n);
@@ -315,7 +391,7 @@ function start() {
   function pickAll() {
     if (mode === 'intro') return [];
     ray.setFromCamera(ndc, camera);
-    const list = mode === 'projects' ? (game.active ? game.pickList() : projMeshes) : mode === 'home' ? giantMeshes.concat(sheetMeshes, hirantha ? hirantha.pickMeshes : []) : giantMeshes;
+    const list = mode === 'experience' && journey.active ? journey.pickList() : mode === 'projects' ? (game.active ? game.pickList() : projMeshes) : mode === 'home' ? giantMeshes.concat(sheetMeshes, hirantha ? hirantha.pickMeshes : []) : giantMeshes;
     return ray.intersectObjects(list, false);
   }
   function pick() { const hit = pickAll()[0]; return hit ? hit.object.userData : null; }
@@ -335,7 +411,10 @@ function start() {
         gsap.to(g.label.scale, { x: g.lw, y: (g.lw * 200) / 640, duration: 0.3 });
       } else {
         const i = +hoverId.slice(2);
-        if (projPieces[i]) gsap.to(projPieces[i].inner.position, { y: i === activeProject ? 0.3 : 0, duration: 0.3 });
+        if (projPieces[i]) {
+          gsap.to(projPieces[i].inner.position, { y: i === activeProject ? 0.2 : 0, duration: 0.3 });
+          gsap.to(projPieces[i].ring.material, { opacity: i === activeProject ? 1 : 0, duration: 0.3 });
+        }
       }
     }
     hoverId = id;
@@ -350,7 +429,11 @@ function start() {
       gsap.to(g.label.scale, { x: g.lw * 1.12, y: (g.lw * 1.12 * 200) / 640, duration: 0.3 });
       if (mode !== h.key) showTip(`${GLYPH[g.s.piece]} ${h.key === 'about' ? 'About me' : g.s.title} · open`, g.s.color);
     } else {
-      if (h.i !== activeProject) gsap.to(projPieces[h.i].inner.position, { y: 0.1, duration: 0.3 });
+      if (h.i !== activeProject) {
+        gsap.to(projPieces[h.i].inner.position, { y: 0.1, duration: 0.3 });
+        gsap.to(projPieces[h.i].ring.material, { opacity: 0.55, duration: 0.2 });
+      }
+      warm(PROJECTS[h.i].url, PROJECTS[h.i].name); // start loading its site before the click
       showTip(`${PROJECTS[h.i].sq} · ${PROJECTS[h.i].name}`, PROJECTS[h.i].color);
     }
   }
@@ -396,7 +479,10 @@ function start() {
       if (now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40) { resetOrbit(); lastTap.t = 0; }
       else lastTap = { t: now, x: e.clientX, y: e.clientY };
     };
-    if (down && !dragging && !cancelled && game.active && mode === 'projects') {
+    if (down && !dragging && !cancelled && journey.active && mode === 'experience') {
+      setNdc(e); const hits = pickAll();
+      if (hits.length) journey.tap(hits); else doubleTap();
+    } else if (down && !dragging && !cancelled && game.active && mode === 'projects') {
       setNdc(e); const hits = pickAll();
       if (hits.length) game.tap(hits); else doubleTap();
     } else if (down && !dragging && !cancelled) {
@@ -420,13 +506,64 @@ function start() {
   /* =========================================================
      LIGHTNING
      ========================================================= */
+  // Like a real storm: the strike is somewhere out beyond the city. The sky lights up in a few
+  // quick flickers (the plaza only gently, from that direction), sometimes you see the bolt
+  // itself, and the thunder arrives later the further away it was: a close one cracks, a far
+  // one only rumbles.
+  const skyBase = scene.background.clone(), fogBase = scene.fog.color.clone(), skyLit = new THREE.Color(0x2c3156);
+  const boltMat = new THREE.LineBasicMaterial({ color: 0xe6ebff, transparent: true, opacity: 0, fog: false, depthWrite: false });
+  const bolt = new THREE.LineSegments(new THREE.BufferGeometry(), boltMat);
+  bolt.frustumCulled = false; bolt.visible = false; scene.add(bolt);
+  // A jagged bolt from the clouds down to the skyline, with a couple of short branches.
+  function makeBolt(x, z) {
+    const pts = [], side = new V3(-z, 0, x).normalize();
+    const path = (p, steps, drift, out) => {
+      for (let i = 0; i < steps && p.y > 4; i++) {
+        const q = p.clone().add(side.clone().multiplyScalar((Math.random() - 0.5) * 5 + drift)).add(new V3(0, -(3 + Math.random() * 4), 0));
+        q.x += (Math.random() - 0.5) * 1.5; q.z += (Math.random() - 0.5) * 1.5;
+        pts.push(p.x, p.y, p.z, q.x, q.y, q.z); out && out.push(q); p = q;
+      }
+    };
+    const trunk = [];
+    path(new V3(x, 78, z), 30, 0, trunk);
+    for (let b = 0; b < 2 + Math.floor(Math.random() * 2); b++) { // branches
+      const from = trunk[Math.floor(Math.random() * trunk.length * 0.6)];
+      if (from) path(from.clone(), 4 + Math.floor(Math.random() * 5), (Math.random() < 0.5 ? -1 : 1) * 2.2, null);
+    }
+    const n = pts.length; for (let i = 0; i < n; i += 3) pts.push(pts[i] + 0.25, pts[i + 1], pts[i + 2]); // a little thicker
+    bolt.geometry.dispose();
+    bolt.geometry = new THREE.BufferGeometry(); bolt.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  }
+  const L = { v: 0 }; let strength = 1, boltOn = false;
+  function applyFlash() {
+    const v = Math.min(1, L.v * strength);
+    // Close up (board, chat) the bright board would glare, so the plaza light stays subtler there;
+    // the sky still lights up fully.
+    flash.intensity = I(mode === 'home' ? 0.5 : 0.1) * v;
+    scene.background.lerpColors(skyBase, skyLit, v);
+    scene.fog.color.lerpColors(fogBase, skyLit, v * 0.75);
+    boltMat.opacity = boltOn ? Math.min(1, L.v * 1.5) : 0;
+  }
   function lightning() {
     if (import.meta.env.DEV && window.__noLightning) return;
-    const tl = gsap.timeline();
-    if (REDUCE) tl.to(flash, { intensity: I(1.2), duration: 0.15 }).to(flash, { intensity: 0, duration: 0.8 });
-    else tl.to(flash, { intensity: I(4), duration: 0.05 }).to(flash, { intensity: I(0.3), duration: 0.08 }).to(flash, { intensity: I(3), duration: 0.05 }).to(flash, { intensity: 0, duration: 0.7 });
-    setTimeout(() => Snd.thunder(), 450 + Math.random() * 1100);
+    const near = Math.random();                       // 0: far away … 1: close
+    const a = (Math.random() * 2 - 1) * 1.05;         // direction, out beyond the kiosk
+    const R = 112 - near * 22, bx = Math.sin(a) * R, bz = -Math.cos(a) * R;
+    strength = 0.45 + near * 0.55;
+    flash.position.set(bx * 0.4, 50, bz * 0.4);       // from the strike's side of the sky, not the camera
+    makeBolt(bx, bz); bolt.visible = !REDUCE; boltOn = !REDUCE;
+    gsap.killTweensOf(L); L.v = 0;
+    const tl = gsap.timeline({ onUpdate: applyFlash, onComplete: () => { bolt.visible = false; boltOn = false; L.v = 0; applyFlash(); } });
+    if (REDUCE) tl.to(L, { v: 0.45, duration: 0.3 }).to(L, { v: 0, duration: 1.4 });
+    else {
+      const pulses = 1 + Math.floor(Math.random() * 3);   // real strikes flicker 1-3 times
+      for (let i = 0; i < pulses; i++) tl.to(L, { v: 1 - i * 0.18, duration: 0.03 }).to(L, { v: 0.1, duration: 0.05 + Math.random() * 0.09 });
+      tl.add(() => { boltOn = false; }).to(L, { v: 0.3, duration: 0.05 }).to(L, { v: 0, duration: 0.7 + near * 0.5, ease: 'power2.out' });
+    }
+    // sound travels about 3 s per km: a close strike is heard almost at once, a far one later
+    setTimeout(() => Snd.thunder(near, Math.sin(a)), 450 + (1 - near) * 4200);
   }
+  if (import.meta.env.DEV) Object.assign(window.__dbg, { lightning, flashAt: (v) => { L.v = v; boltOn = v > 0; bolt.visible = v > 0; applyFlash(); }, makeBolt });
   const scheduleLightning = () => setTimeout(() => { lightning(); scheduleLightning(); }, 15000 + Math.random() * 17000);
 
   /* =========================================================
@@ -465,8 +602,9 @@ function start() {
   // and the first visit to Projects don't stutter. compileAsync doesn't block the page.
   function ready() {
     startBtn.disabled = false;
-    stLoad.innerHTML = '<b>Ready.</b> 64 squares, 8 projects, 1 rainy night';
+    stLoad.innerHTML = `<b>Ready.</b> 64 squares, ${PROJECTS.length} projects, 1 rainy night`;
     startBtn.focus({ preventScroll: true });
+    if (autoStart) startBtn.click(); // embedded: START was already pressed
   }
   const hidden = projPieces.map((p) => p.holder); // still shrunk under the board, so nothing shows
   hidden.forEach((o) => { o.visible = true; });
@@ -474,8 +612,9 @@ function start() {
     hidden.forEach((o) => { o.visible = false; });
     ready();
   });
+  let started = false; // nothing is drawn behind the START screen
   startBtn.addEventListener('click', () => {
-    startBtn.disabled = true;
+    startBtn.disabled = true; started = true;
     Snd.init(); syncSnd();
     gsap.to('#start', { opacity: 0, duration: 0.9, ease: 'power2.out', onComplete: () => { $('#start').hidden = true; } });
     runIntro(location.hash.slice(1));
@@ -506,6 +645,7 @@ function start() {
 
   function frame(now) {
     requestAnimationFrame(frame);
+    if (!started) { last = now; return; } // the START screen covers the canvas: skip the work
     const rawDt = (now - last) / 1000;
     const dt = Math.min(rawDt, 0.05); last = now; elapsed += dt;
     W.updateRain(dt);
@@ -515,10 +655,12 @@ function start() {
     codeT += dt; if (codeT > 0.07) { W.drawCode(codeT); codeT = 0; }
     if (ptrMoved && !TOUCH && !down) {
       ptrMoved = false;
-      if (game.active && mode === 'projects') canvas.style.cursor = pick() ? 'pointer' : 'default';
+      if ((game.active && mode === 'projects') || (journey.active && mode === 'experience')) canvas.style.cursor = pick() ? 'pointer' : 'default';
       else setHover(pick());
     }
     game.update(dt);
+    journey.update(dt);
+    placeNameTag();
     W.stringLights.visible = !game.active && mode !== 'talk'; // from the visitor's seat they'd hang right over his face
 
     if (!down && canOrbit() && Math.abs(yawVel) > 0.0002) { yawTarget += yawVel; yawVel *= Math.pow(0.93, dt * 60); }

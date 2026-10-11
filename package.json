@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "embed": "node scripts/embed-qa.mjs",
-    "eval": "node scripts/eval-assistant.mjs"
+    "eval": "node scripts/eval-assistant.mjs",
+    "games": "node scripts/build-games.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.132.1",
@@ -21,6 +22,7 @@
     "three": "^0.186.1"
   },
   "devDependencies": {
+    "chess.js": "^1.4.0",
     "vite": "^8.3.3"
   }
 }

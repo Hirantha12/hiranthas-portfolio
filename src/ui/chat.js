@@ -3,6 +3,7 @@
 // the same facts. Answers are read aloud with the browser's speech synthesis while the avatar's
 // mouth moves.
 import { INTRO, SUGGESTIONS } from '../data/assistant.js';
+import { PROFILE } from '../data/content.js';
 import { Snd } from '../audio/sound.js';
 
 const TIMEOUT_MS = 15000;
@@ -25,7 +26,7 @@ function pickVoice() {
 if (synth) { pickVoice(); synth.addEventListener?.('voiceschanged', pickVoice); }
 
 export function createChat({ panel, onTalk }) {
-  let body = null, history = [], busy = false, speakId = 0, open = false;
+  let body = null, history = [], busy = false, speakId = 0, open = false, session = 0;
 
   // Reads text aloud one sentence at a time (long single utterances get cut off in Chrome).
   // onTalk(true/false) drives the avatar's mouth; with sound off or no speech support, the
@@ -66,31 +67,36 @@ export function createChat({ panel, onTalk }) {
     history.push({ role: 'user', content: q });
     const typing = add('him', '…'); typing.classList.add('typing');
     const form = body.querySelector('#cForm'); form.classList.add('busy');
+    const mine = session; // if the chat is closed (or closed and reopened) meanwhile, drop this answer
 
     let text = null, note = '';
-    // Optional LLM layer (api/ask.js): used only once an API key is configured on the server.
-    // The first "not configured" reply switches it off for the rest of the visit.
-    if (llm !== false) {
-      try {
-        const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-        const r = await fetch('/api/ask', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: history }), signal: ctrl.signal,
-        });
-        clearTimeout(timer);
-        const data = await r.json().catch(() => ({}));
-        if (r.ok && data.answer) { text = data.answer; note = 'answered by Claude'; llm = true; }
-        else if (r.status === 404 || r.status === 503) llm = false;
-      } catch (e) { /* network or timeout: use the in-browser assistant */ }
-    }
-    // Free, in-browser assistant: semantic search over the CV answers.
-    if (!text) {
-      const r = await (await brain()).answer(q);
-      text = r.text;
-      note = r.how === 'semantic' ? `in-browser AI · ${Math.round(r.score * 100)}% match` : r.how === 'keyword' ? 'keyword match' : '';
+    try {
+      // Optional LLM layer (api/ask.js): used only once an API key is configured on the server.
+      // The first "not configured" reply switches it off for the rest of the visit.
+      if (llm !== false) {
+        try {
+          const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+          const r = await fetch('/api/ask', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages: history }), signal: ctrl.signal,
+          });
+          clearTimeout(timer);
+          const data = await r.json().catch(() => ({}));
+          if (r.ok && data.answer) { text = data.answer; note = 'answered by Claude'; llm = true; }
+          else if (r.status === 404 || r.status === 503) llm = false;
+        } catch (e) { /* network or timeout: use the in-browser assistant */ }
+      }
+      // Free, in-browser assistant: semantic search over the CV answers.
+      if (!text) {
+        const r = await (await brain()).answer(q);
+        text = r.text;
+        note = r.how === 'semantic' ? `in-browser AI · ${Math.round(r.score * 100)}% match` : r.how === 'keyword' ? 'keyword match' : '';
+      }
+    } catch (e) { // e.g. the assistant's code failed to download on a flaky connection
+      text = text || `Sorry, I couldn't answer just now. Please try again, or email me at ${PROFILE.email}.`; note = '';
     }
 
-    if (!open) { busy = false; return; } // chat was closed while waiting
+    if (!open || mine !== session) return; // chat was closed while waiting (openChat resets busy)
     typing.remove();
     add('him', text, note);
     history.push({ role: 'assistant', content: text });
@@ -100,7 +106,7 @@ export function createChat({ panel, onTalk }) {
   }
 
   function openChat() {
-    open = true; history = [];
+    open = true; history = []; busy = false; session++;
     // start downloading the model while he introduces himself, and show its progress
     brain().then((m) => m.warmUp().then(() => m)).then((m) => {
       const st = body && body.querySelector('#cStat'); if (!st) return;
@@ -133,7 +139,7 @@ export function createChat({ panel, onTalk }) {
     setTimeout(() => { if (open) speak(INTRO); }, 900); // after he waves
   }
 
-  function closeChat() { open = false; busy = false; stopSpeaking(); }
+  function closeChat() { open = false; busy = false; session++; stopSpeaking(); }
 
   return { open: openChat, close: closeChat, get isOpen() { return open; } };
 }

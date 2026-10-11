@@ -79,3 +79,25 @@ Current accuracy: 96% on the dev set, 90% on the held-out set. Most misses answe
 2. Compress models with `npx @gltf-transform/cli optimize in.glb out.glb`.
 3. Move the rain to the GPU (a shader on `InstancedMesh` or `Points`) for better phone performance.
 4. Add an `OutputPass` after bloom once you switch to sRGB output and tone mapping.
+
+## Play for them (the chess game)
+
+In Projects, "Beat me in 9 moves" starts a game. The visitor plays Black, each move unlocks one project, and move 9 is checkmate. Every game picks a random opening trap (never the same one twice in a row), from 14 lines such as the Englund Gambit, Budapest Gambit, Stafford Gambit, Siberian trap, Fishing Pole and Traxler.
+
+- `scripts/game-lines.mjs`: the openings in normal chess notation. Add or change lines here.
+- `npm run games`: checks every line with chess.js (legal, 9 moves, ends in checkmate) and rebuilds `src/data/games.js`.
+- There is one move per project, so with 9 projects every line has 9 moves.
+
+After adding or renaming a project, run `npm run embed` (and `npm run eval`) so the "Ask Hirantha" assistant knows about it. Until then it still works, but builds that data in the visitor's browser on first use, which is slower.
+
+## Play for them (the chess game)
+
+Projects → **Beat me in 9 moves**: the visitor plays Black, each move unlocks one of the 9 projects, and move 9 is checkmate. Every game picks one of 14 opening traps at random (never the same one twice in a row), from `scripts/game-lines.mjs`.
+
+To add or change an opening, edit `scripts/game-lines.mjs` and run:
+
+```bash
+npm run games   # checks every line with chess.js and rebuilds src/data/games.js
+```
+
+Each line must be exactly 9 moves per side, legal, and end with Black giving checkmate. The game has one move per project, so keep 9 projects in `content.js`.
