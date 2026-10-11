@@ -316,3 +316,11 @@ ul.hl li::marker{color:var(--sec)}
 .pv-live .pv-stage .nm{bottom:auto;top:12px}
 .pv-live:not(.loaded) .pv-expand{display:none}
 @media (prefers-reduced-motion:reduce){.pv-sweep::after,.pv-spin,.pv-live:not(.loaded) .pv-stage .big{animation:none}.pv-sweep::after{left:0;width:100%;opacity:.5}}
+
+.gline{font:400 11.5px/1.6 var(--f-mono);color:var(--muted);margin-top:6px!important}
+
+/* the one thing to do right now, in the game status line */
+.gcall{display:inline-block;margin-top:6px;padding:4px 10px;font-weight:600;color:#0b0812;background:var(--mint);box-shadow:0 0 14px color-mix(in srgb,var(--mint) 55%,transparent)}
+.gcall.pulse{animation:gcall 1.4s ease-in-out infinite}
+@keyframes gcall{50%{box-shadow:0 0 2px color-mix(in srgb,var(--mint) 30%,transparent);filter:brightness(.9)}}
+@media (prefers-reduced-motion:reduce){.gcall.pulse{animation:none}}
