@@ -10,6 +10,8 @@ export const PROFILE = {
   // Your photo: put a square image (800×800 or larger) at public/hirantha.jpg. Until it's there,
   // the About panel shows your initials instead.
   photo: '/hirantha.jpg',
+  // Your CV: public/Hirantha_Rathnayaka_CV.pdf (replace the file to update it; keep the name).
+  cv: '/Hirantha_Rathnayaka_CV.pdf',
   now: 'Software Engineer at Softvil Technologies',
 };
 
