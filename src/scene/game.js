@@ -9,6 +9,7 @@ import { makePiece } from './pieces.js';
 import { PROJECTS } from '../data/content.js';
 import { pickGame } from '../data/games.js';
 import { Snd } from '../audio/sound.js';
+import { deep } from './world.js';
 
 const BACK = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook'];
 const FILES = 'abcdefgh';
@@ -110,9 +111,16 @@ export function createGame({ scene, camera, board, boardTop, sqPos, ivory, ebony
     const geo = new THREE.ShapeGeometry(s); geo.rotateX(-Math.PI / 2); // shape +y now points to -z
     arrow = new THREE.Mesh(geo, arrowMat);
     arrow.position.set(a.x, 0.012, a.z); arrow.rotation.y = Math.atan2(-dx, -dz);
-    arrowMat.color.set(color); markMat.color.set(color);
+    arrowColor = color; paintArrow();
     board.add(arrow);
     fromMark.position.x = a.x; fromMark.position.z = a.z; fromMark.visible = true;
+  }
+  // By day the light wooden board needs a deeper colour (and no additive glow) to stand out.
+  let arrowColor = '#57ffb0', dayMode = false;
+  function paintArrow() {
+    const c = dayMode ? deep(arrowColor, 0.5) : arrowColor;
+    arrowMat.color.set(c); markMat.color.set(c);
+    markMat.blending = dayMode ? THREE.NormalBlending : THREE.AdditiveBlending; markMat.opacity = dayMode ? 0.4 : 0.35;
   }
   function hideArrow() {
     if (arrow) { board.remove(arrow); arrow.geometry.dispose(); arrow = null; }
@@ -328,20 +336,34 @@ export function createGame({ scene, camera, board, boardTop, sqPos, ivory, ebony
   function tap(hits) {
     if (!hits.length) return;
     const data = hits[0].object.userData;
-    if (data.kind === 'gclock') {
-      if (state === 'start') { state = 'starting'; handPress(() => { press('b'); whiteTurn(); }); } // tapped before the demo
-      else if (state === 'press') {
-        state = 'pressing'; // ignore extra taps while the hand presses
-        handPress(() => { press('b'); onChange({ phase: 'project', k }); k++; later(whiteTurn, 900); });
-      }
-      return;
-    }
+    if (data.kind === 'gclock') { pressClock(); return; }
     if (state !== 'move') return;
     const [from, to] = G.moves[k].black;
     const squares = hits.map((h) => squareOf(h.object.userData, h.point));
     if (squares.includes(to) && (selected || !squares.includes(from))) blackMove();
     else if (squares.includes(from)) select(pieces.get(from));
     else nudge();
+  }
+
+  // The visitor's clock: tapped in 3D or with the "Press" button in the panel.
+  function pressClock() {
+    if (state === 'start') { state = 'starting'; handPress(() => { press('b'); whiteTurn(); }); } // tapped before the demo
+    else if (state === 'press') {
+      state = 'pressing'; // ignore extra taps while the hand presses
+      handPress(() => { press('b'); onChange({ phase: 'project', k }); k++; later(whiteTurn, 900); });
+    }
+  }
+  // The "Move" button in the panel plays the visitor's move for them: the piece lifts, then moves.
+  function autoMove() {
+    if (state !== 'move') return;
+    const p = pieces.get(G.moves[k].black[0]);
+    state = 'auto';
+    if (selected !== p) select(p);
+    later(() => { if (state === 'auto') blackMove(); }, 320);
+  }
+  function action(a) {
+    if (a === 'g-move') autoMove();
+    else if (a === 'g-press') pressClock();
   }
 
   let pulse = 0;
@@ -357,14 +379,22 @@ export function createGame({ scene, camera, board, boardTop, sqPos, ivory, ebony
     blackBtn.material.emissiveIntensity = yourPress ? glow : 0;
     pointer.visible = yourPress;
     if (yourPress) pointer.position.y = 0.6 + Math.abs(Math.sin(pulse * 4)) * 0.12;
-    if (arrow) arrowMat.opacity = 0.6 + 0.3 * Math.sin(pulse * 4);
+    if (arrow) arrowMat.opacity = dayMode ? 0.88 + 0.12 * Math.sin(pulse * 4) : 0.6 + 0.3 * Math.sin(pulse * 4);
     if (vHand.visible) placeVisitorHand();
   }
 
   const pickList = () => all.filter((p) => p.g.visible).map((p) => p.mesh).concat(boardTop, clockMeshes);
 
   return {
-    enter, exit, tap, update, pickList, layout, shake,
+    enter, exit, tap, update, pickList, layout, shake, action,
+    // Sunny mood: the visitor's mint "hologram" hand and the clock pointer vanish against the
+    // grass, so by day they turn solid pink instead.
+    setDay(day) {
+      holo.color.set(day ? 0xff3d8b : 0x57ffb0); holo.opacity = day ? 0.9 : 0.55;
+      holo.blending = day ? THREE.NormalBlending : THREE.AdditiveBlending;
+      pointer.material.color.set(day ? 0xff3d8b : 0x57ffb0);
+      dayMode = day; paintArrow();
+    },
     // The avatar arrives with a lazy import(); if a game is already running he sits down at once.
     // Outside a game he sits in the kiosk coding.
     setAvatar(a) { avatar = a; if (state !== 'off') { a.show(); if (state === 'move') a.watchVisitor(); } else a.sitDown(); },
