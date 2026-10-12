@@ -15,7 +15,7 @@ import '@fontsource/jetbrains-mono/500.css';
 import '@fontsource/jetbrains-mono/600.css';
 import '@fontsource/monoton/400.css';
 import './style.css';
-import { SECTIONS, PROJECTS, GLYPH } from './data/content.js';
+import { SECTIONS, PROJECTS, GLYPH, PROFILE } from './data/content.js';
 import { Snd } from './audio/sound.js';
 import { setMaxAnisotropy } from './scene/canvas.js';
 import { buildWorld } from './scene/world.js';
@@ -246,7 +246,44 @@ function start(autoStart) {
   const hTag = $('#hTag'), sTag = $('#sTag'), tagPos = new V3(), tagTop = new V3(), kioskAt = new V3(0.5, 2.1, -4.1);
   const TAG_FULL_PPM = 56; // pixels per metre at the kiosk on a 1845px-wide screen
   hTag.addEventListener('click', () => goTo('talk'));
-  sTag.addEventListener('click', () => goTo('about'));
+  sTag.querySelector('.st-story').addEventListener('click', () => goTo('about'));
+  sTag.querySelector('.st-cv').addEventListener('click', () => takeCopy());
+
+  // "Take a copy of my scoresheet": a carbon copy of the scoresheet peels off the clipboard,
+  // flies up to the visitor, then the CV downloads (and the copy flies off to the browser's
+  // downloads, top right). The About and Contact panels have a plain download button too.
+  const CV_NAME = 'Hirantha_Rathnayaka_CV.pdf';
+  function downloadCV() {
+    const a = document.createElement('a'); a.href = PROFILE.cv; a.download = CV_NAME;
+    document.body.append(a); a.click(); a.remove();
+  }
+  let toastT = 0;
+  function cvToast() {
+    const t = $('#cvToast');
+    t.innerHTML = `<i aria-hidden="true">⬇</i><span><b>${CV_NAME}</b><small>Your copy of my scoresheet is downloading</small></span>`;
+    t.hidden = false; requestAnimationFrame(() => t.classList.add('on'));
+    clearTimeout(toastT); toastT = setTimeout(() => { t.classList.remove('on'); setTimeout(() => { t.hidden = true; }, 400); }, 3800);
+  }
+  let copying = false;
+  function takeCopy() {
+    if (copying) return;
+    Snd.tick();
+    if (REDUCE) { downloadCV(); cvToast(); return; }
+    copying = true;
+    sheetMeshes[2].getWorldPosition(tagPos).project(camera); // the paper on the clipboard
+    const sx = ((tagPos.x + 1) / 2) * innerWidth, sy = ((1 - tagPos.y) / 2) * innerHeight;
+    const el = document.createElement('div'); el.className = 'cvfly'; el.setAttribute('aria-hidden', 'true');
+    el.innerHTML = `<div class="cvp-head">♞ OFFICIAL SCORESHEET</div><div class="cvp-name">${PROFILE.name.toUpperCase()}</div>
+      <div class="cvp-role">${PROFILE.role}</div><div class="cvp-lines">${'<i></i>'.repeat(9)}</div><div class="cvp-stamp">COPY</div>`;
+    document.body.append(el);
+    gsap.set(el, { x: sx, y: sy, xPercent: -50, yPercent: -50, scale: 0.2, rotation: -16, opacity: 0 });
+    gsap.timeline({ onComplete: () => { el.remove(); copying = false; } })
+      .to(sheet.tilt.position, { y: 1.1, duration: 0.18, yoyo: true, repeat: 1, ease: 'sine.inOut' })
+      .to(el, { opacity: 1, duration: 0.15 }, 0.1)
+      .to(el, { x: innerWidth / 2, y: innerHeight * 0.46, scale: 1, rotation: -3, duration: 0.75, ease: 'power3.out' }, 0.1)
+      .add(() => { Snd.clack(1.8, 0.25); downloadCV(); cvToast(); }, '+=0.35')
+      .to(el, { x: innerWidth - 70, y: 24, scale: 0.08, rotation: 14, opacity: 0.2, duration: 0.6, ease: 'power2.in' }, '+=0.25');
+  }
   let sheetBobbed = false;
   // Pins a tag to a world point. `anchor` is the CSS offset of the tag from that point.
   function pinTag(el, at, anchor, size) {
@@ -530,7 +567,8 @@ function start(autoStart) {
   // quick flickers (the plaza only gently, from that direction), sometimes you see the bolt
   // itself, and the thunder arrives later the further away it was: a close one cracks, a far
   // one only rumbles.
-  const skyBase = scene.background.clone(), fogBase = scene.fog.color.clone(), skyLit = new THREE.Color(0x2c3156);
+  // The night sky and fog colours (fixed: the page may have started in the sunny mood, so don't copy the current ones).
+  const skyBase = new THREE.Color(0x07060c), fogBase = new THREE.Color(0x0b0815), skyLit = new THREE.Color(0x2c3156);
   const boltMat = new THREE.LineBasicMaterial({ color: 0xe6ebff, transparent: true, opacity: 0, fog: false, depthWrite: false });
   const bolt = new THREE.LineSegments(new THREE.BufferGeometry(), boltMat);
   bolt.frustumCulled = false; bolt.visible = false; scene.add(bolt);
