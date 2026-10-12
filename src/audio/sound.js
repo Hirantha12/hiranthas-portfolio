@@ -3,11 +3,14 @@
 
 let storedMute = false;
 try { storedMute = localStorage.getItem('hg-muted') === '1'; } catch (e) { /* storage blocked */ }
+// Chords for the soft background pad: A minor at night, a bright C major 7 by day.
+const PAD = { night: [110, 164.81, 196, 261.63], day: [130.81, 196, 246.94, 329.63] };
 
 export const Snd = {
   ctx: null,
   master: null,
   muted: storedMute,
+  mood: 'night', // set by the page before START; 'day' plays birdsong, a breeze and a stream instead of rain
 
   init() {
     if (this.ctx) return;
@@ -40,7 +43,11 @@ export const Snd = {
     // Rain, tuned to sound like rain heard from indoors: warm and soft, without bright hiss.
     // Both layers go through one bus whose level drifts slowly up and down, like gusts.
     const RAIN_VOLUME = 0.25; // overall rain level (hiss, body and drips); lower = quieter
-    const rainBus = gain(RAIN_VOLUME); rainBus.connect(master);
+    const day = this.mood === 'day';
+    // night sounds (rain) and day sounds (birds, breeze, stream) each have a bus that fades in or out
+    const nightBus = (this.nightBus = gain(day ? 0 : 1)); nightBus.connect(master);
+    const dayBus = (this.dayBus = gain(day ? 1 : 0)); dayBus.connect(master);
+    const rainBus = gain(RAIN_VOLUME); rainBus.connect(nightBus);
     const gust = ctx.createOscillator(), gustDepth = gain(RAIN_VOLUME * 0.14);
     gust.frequency.value = 0.045; gust.connect(gustDepth).connect(rainBus.gain); gust.start();
     // rain hiss: darker and quieter (highs rolled off above ~1.8 kHz)
@@ -53,24 +60,93 @@ export const Snd = {
     rb.connect(filt('highpass', 150)).connect(filt('lowpass', 600)).connect(gain(0.07)).connect(rainBus);
     rb.start();
     this.rainBus = rainBus;
-    // soft A-minor pad for the game mood
+    // Day: a soft breeze that rises and falls, and a stream babbling somewhere behind the kiosk.
+    const br = ctx.createBufferSource(); br.buffer = brown; br.loop = true;
+    const breeze = gain(0.05), wind = ctx.createOscillator(), windDepth = gain(0.035);
+    wind.frequency.value = 0.07; wind.connect(windDepth).connect(breeze.gain); wind.start();
+    br.connect(filt('bandpass', 420, 0.6)).connect(filt('lowpass', 900)).connect(breeze).connect(dayBus); br.start();
+    const water = ctx.createBufferSource(); water.buffer = white; water.loop = true;
+    const wbp = filt('bandpass', 1100, 0.8), wob = ctx.createOscillator(), wobDepth = gain(380);
+    wob.frequency.value = 3.3; wob.connect(wobDepth).connect(wbp.frequency); wob.start(); // a gurgle
+    water.connect(filt('highpass', 300)).connect(wbp).connect(gain(0.022)).connect(dayBus); water.start(0, 1.3);
+    this.streamBus = gain(0.6); this.streamBus.connect(dayBus);
+    // soft pad for the game mood (A minor at night, C major 7 by day)
     const pad = gain(0), plp = filt('lowpass', 700);
     plp.connect(pad); pad.connect(master);
     pad.gain.setTargetAtTime(0.032, ctx.currentTime + 2, 3);
-    [110, 164.81, 196, 261.63].forEach((f, i) => {
+    this.pad = PAD[day ? 'day' : 'night'].map((f, i) => {
       const o = ctx.createOscillator(); o.type = i % 2 ? 'triangle' : 'sine';
       o.frequency.value = f; o.detune.value = (i - 1.5) * 5; o.connect(plp); o.start();
+      return o;
     });
     const lfo = ctx.createOscillator(), lg = gain(260);
     lfo.frequency.value = 0.06; lfo.connect(lg).connect(plp.frequency); lfo.start();
 
     this.dripLoop();
+    this.birdLoop();
+    this.bubbleLoop();
     document.addEventListener('visibilitychange', () => { if (document.hidden) ctx.suspend(); else ctx.resume(); });
   },
 
   ok() { return this.ctx && this.ctx.state === 'running'; },
 
-  dripLoop() { setTimeout(() => { this.drip(); this.dripLoop(); }, 160 + Math.random() * 420); },
+  dripLoop() { setTimeout(() => { if (this.mood === 'night') this.drip(); this.dripLoop(); }, 160 + Math.random() * 420); },
+  // Birdsong: a phrase every few seconds, sometimes answered by a second bird.
+  birdLoop() {
+    setTimeout(() => {
+      if (this.mood === 'day') { this.bird(); if (Math.random() < 0.35) setTimeout(() => this.bird(), 500 + Math.random() * 900); }
+      this.birdLoop();
+    }, 1400 + Math.random() * 4200);
+  },
+  bubbleLoop() { setTimeout(() => { if (this.mood === 'day') this.bubble(); this.bubbleLoop(); }, 50 + Math.random() * 190); },
+
+  // Switch between night (rain, thunder) and day (birds, breeze, stream), crossfading over 3 s.
+  setMood(m) {
+    this.mood = m;
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime, day = m === 'day';
+    this.nightBus.gain.setTargetAtTime(day ? 0 : 1, t, 0.9);
+    this.dayBus.gain.setTargetAtTime(day ? 1 : 0, t, 0.9);
+    this.pad.forEach((o, i) => o.frequency.setTargetAtTime(PAD[m][i], t, 0.8));
+  },
+
+  // One bird phrase: a "tweet-tweet", a quick falling trill, or a warble. Placed left or right.
+  bird() {
+    if (!this.ok()) return;
+    const ctx = this.ctx, r = Math.random, t0 = ctx.currentTime + 0.02;
+    let out = this.dayBus;
+    if (ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = r() * 1.6 - 0.8; p.connect(this.dayBus); out = p; }
+    const vol = 0.022 + r() * 0.02;
+    const note = (at, f0, f1, dur, v) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.setValueAtTime(f0, at); o.frequency.exponentialRampToValueAtTime(f1, at + dur);
+      g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(v, at + dur * 0.25); g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+      o.connect(g).connect(out); o.start(at); o.stop(at + dur + 0.02);
+    };
+    const kind = Math.floor(r() * 3);
+    if (kind === 0) { // tweet-tweet
+      const f = 2600 + r() * 1400, k = 2 + Math.floor(r() * 3), up = r() < 0.5;
+      for (let i = 0; i < k; i++) note(t0 + i * (0.14 + r() * 0.05), up ? f : f * 1.4, up ? f * 1.4 : f, 0.08 + r() * 0.04, vol);
+    } else if (kind === 1) { // trill, falling
+      const f = 4200 + r() * 900, k = 7 + Math.floor(r() * 8);
+      for (let i = 0; i < k; i++) note(t0 + i * 0.055, f - i * 70, f - i * 70 - 450, 0.04, vol * 0.8);
+    } else { // warble
+      const o = ctx.createOscillator(), m = ctx.createOscillator(), md = ctx.createGain(), g = ctx.createGain(), d = 0.35 + r() * 0.35;
+      o.frequency.value = 2300 + r() * 800; m.frequency.value = 22 + r() * 18; md.gain.value = 220 + r() * 260;
+      m.connect(md).connect(o.frequency);
+      g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(vol * 0.8, t0 + 0.04); g.gain.setValueAtTime(vol * 0.8, t0 + d * 0.7); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+      o.connect(g).connect(out); o.start(t0); m.start(t0); o.stop(t0 + d + 0.02); m.stop(t0 + d + 0.02);
+    }
+  },
+  // A tiny rising "blip": many of them in a row sound like water running over stones.
+  bubble() {
+    if (!this.ok()) return;
+    const ctx = this.ctx, t = ctx.currentTime, r = Math.random;
+    const o = ctx.createOscillator(), g = ctx.createGain(), f = 350 + r() * 650, d = 0.025 + r() * 0.04;
+    o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * (1.8 + r()), t + d);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.006 + r() * 0.01, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(g).connect(this.streamBus); o.start(t); o.stop(t + d + 0.01);
+  },
 
   // A single soft drop: lower pitched, gentle attack, placed somewhere left or right.
   drip() {
