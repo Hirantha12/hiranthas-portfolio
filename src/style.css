@@ -1,7 +1,8 @@
 
 /* Hirantha's Gambit
    Layout: full-bleed WebGL stage; HUD pinned to the corners; one glass "scoresheet" panel docks right
-   (bottom sheet on phones). Deliberately a single dark theme: a neon night scene. */
+   (bottom sheet on phones). Two moods: the dark neon night (default) and a light, sunny day
+   (body.day, see the end of this file). */
 :root{
   --ink:#07060c;
   --panel:rgba(13,10,24,.86);
@@ -58,12 +59,16 @@ button{font:inherit;color:inherit}
 .dock .g{font-size:19px;line-height:1;color:var(--c);text-shadow:0 0 10px var(--c)}
 .dock button:hover{background:rgba(255,255,255,.05);border-color:var(--line)}
 .dock button[aria-current="true"]{border-color:var(--c);box-shadow:inset 0 0 20px -8px var(--c)}
-#hint{position:fixed;z-index:4;left:16px;right:16px;bottom:calc(78px + env(safe-area-inset-bottom,0px));text-align:center;font:400 11px var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);pointer-events:none;opacity:0;transition:opacity .6s}
+#hint{position:fixed;z-index:4;left:50%;transform:translateX(-50%);bottom:calc(80px + env(safe-area-inset-bottom,0px));width:max-content;max-width:calc(100% - 32px);display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:4px 10px;padding:8px 16px;background:var(--panel);border:1px solid var(--line);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font:400 13px/1.35 var(--f-ui);letter-spacing:.02em;color:var(--text);text-align:center;pointer-events:none;opacity:0;transition:opacity .6s}
+#hint:empty{display:none}
+#hint span{white-space:nowrap}
+#hint b{font-weight:700;color:var(--mint)}
+#hint i{font-style:normal;color:var(--muted)}
 body.ready .hud,body.ready .dock{opacity:1}
 /* keep the dock clear of the open panel on desktop */
 @media (min-width:861px) and (max-width:1400px){body.panel-open .dock .l{display:none}}
 @media (min-width:861px){body.panel-open .dock{left:calc((100% - min(460px,42vw) - 16px)/2);max-width:calc(100% - min(460px,42vw) - 48px)}}
-body.ready.home #hint{opacity:.9}
+body.ready.home #hint{opacity:1}
 
 #tip{position:fixed;z-index:7;left:0;top:0;pointer-events:none;font:600 12px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;padding:7px 10px;background:var(--panel);border:1px solid var(--c,var(--line));color:var(--cream);opacity:0;transition:opacity .15s;white-space:nowrap}
 #tip.on{opacity:1}
@@ -194,7 +199,7 @@ body.ready.home #hint{opacity:.9}
 .quick .close-q{position:fixed;top:calc(14px + env(safe-area-inset-top,0px));right:16px}
 
 /* small screens: shorter, smaller hint */
-@media (max-width:700px){#hint{font-size:10px;letter-spacing:.12em;bottom:calc(72px + env(safe-area-inset-bottom,0px))}}
+@media (max-width:700px){#hint{font-size:12px;gap:2px 8px;padding:6px 12px;bottom:calc(72px + env(safe-area-inset-bottom,0px))}}
 
 /* ---------- "Play for them" game ---------- */
 .playcard{width:100%;display:grid;gap:4px;text-align:left;cursor:pointer;margin:0 0 18px;padding:14px 16px;background:linear-gradient(120deg,rgba(87,255,176,.10),rgba(255,61,154,.08));border:1px solid var(--mint);color:var(--text);box-shadow:inset 0 0 24px -12px var(--mint);transition:box-shadow .25s,transform .25s}
@@ -333,3 +338,114 @@ ul.hl li::marker{color:var(--sec)}
 .jrole .ctx{color:var(--pc)!important;margin:0 0 6px!important}
 .jrole .jt{margin:0 0 2px;font-size:19px;font-weight:700;color:var(--cream);line-height:1.25}
 .jrole p:last-child{margin:8px 0 0}
+
+/* ---------- mood: START screen choice and the ☾/☀ switch ---------- */
+.st-mood{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
+.st-mood button{display:grid;grid-template-columns:auto 1fr;column-gap:12px;align-items:center;min-width:210px;text-align:left;cursor:pointer;padding:12px 16px;background:rgba(255,255,255,.03);border:1px solid var(--line);color:var(--muted);transition:border-color .3s,background .3s,box-shadow .3s}
+.st-mood .mi{grid-row:span 2;font-size:28px;line-height:1;color:var(--muted);transition:color .3s,text-shadow .3s}
+.st-mood b{font-weight:600;font-size:15px;letter-spacing:.04em;color:var(--cream)}
+.st-mood small{font:400 11px var(--f-mono);letter-spacing:.04em;color:var(--muted)}
+.st-mood button:hover{border-color:rgba(190,170,255,.4)}
+.st-mood [data-mood="night"][aria-pressed="true"]{border-color:var(--violet);background:rgba(167,123,255,.10);box-shadow:0 0 22px -8px var(--violet)}
+.st-mood [data-mood="night"][aria-pressed="true"] .mi{color:#d9cbff;text-shadow:0 0 12px var(--violet)}
+.st-mood [data-mood="day"][aria-pressed="true"]{border-color:#e6a100;background:rgba(255,214,90,.22);box-shadow:0 0 22px -8px #f5b400}
+.st-mood [data-mood="day"][aria-pressed="true"] .mi{color:#f0a000}
+.hud-r{display:flex;gap:8px;align-items:center}
+.moodsw{display:flex;gap:2px;padding:3px;background:var(--panel);border:1px solid var(--line)}
+.moodsw button{display:flex;gap:6px;align-items:center;cursor:pointer;background:transparent;border:1px solid transparent;padding:6px 9px;font:500 11px var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.moodsw .mi{font-size:15px;line-height:1}
+.moodsw button:hover{color:var(--cream)}
+.moodsw button[aria-pressed="true"]{color:var(--cream);border-color:var(--line);background:rgba(255,255,255,.07)}
+.moodsw [data-mood="night"][aria-pressed="true"] .mi{color:#d9cbff;text-shadow:0 0 8px var(--violet)}
+.moodsw [data-mood="day"][aria-pressed="true"] .mi{color:#e69a00}
+@media (max-width:600px){
+  .moodsw .ml{display:none}
+  .moodsw button{padding:6px 8px}
+  #sndLabel{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .chip{padding:10px}
+}
+#start,#panel,.dock,.chip,.moodsw,#tip,.htag,.logo,.gstat,.preview{transition:background-color .8s,color .8s,border-color .8s}
+
+/* ---------- sunny day: light, natural panels ---------- */
+body.day{
+  --ink:#dceef8;
+  --panel:rgba(252,250,243,.9);
+  --line:rgba(36,66,44,.17);
+  --cream:#1c2a21;   /* the main text colour: dark ink by day */
+  --text:#34463b;
+  --muted:#5d6e64;
+  --magenta:#cf1d6c;
+  --cyan:#0a8297;
+  --amber:#a86200;
+  --violet:#6a43d1;
+  --mint:#0f8452;
+  color-scheme:light;
+}
+/* section and project colours come from content.js as neon hex; darken them where they're text */
+body.day .eyebrow,body.day .stats b,body.day .mv-n,body.day .ctx,body.day .crow a:hover{color:color-mix(in srgb,var(--sec) 60%,#0f140f)}
+body.day .p-glyph{color:color-mix(in srgb,var(--sec) 60%,#0f140f);text-shadow:none;background:color-mix(in srgb,var(--sec) 12%,transparent)}
+body.day .stats b{text-shadow:none}
+body.day .pitem .sq,body.day .jrole .ctx{color:color-mix(in srgb,var(--pc) 60%,#0f140f)!important}
+body.day #panel::before{box-shadow:none}
+body.day .p-body{scrollbar-color:rgba(36,66,44,.28) transparent}
+body.day .stats div,body.day .pitem,body.day .pager button,body.day .chips span,body.day .note,body.day .jrole{background:rgba(255,255,255,.55)}
+body.day .gstat{background:rgba(252,250,243,.97)}
+body.day .gcall{color:#fff}
+body.day .gstat .shake{color:#fff}
+body.day .gdots i.on{box-shadow:none}
+body.day .dock .g{text-shadow:none}
+body.day .logo{text-shadow:none}
+body.day .brand b,body.day .brand span{text-shadow:0 0 8px rgba(255,255,255,.85)}
+body.day #hint b{color:#0f6e45}
+body.day .htag{background:rgba(255,252,244,.93)}
+body.day .cform input{background:#fff}
+body.day .cmsg.him{background:rgba(10,130,151,.07)}
+body.day .preview{background:#f4f1e8}
+body.day .pv-stage .nm,body.day .pv-chip{color:#f3ead8}
+body.day .pvm-win{background:#f6f3ea}
+body.day .playcard{background:linear-gradient(120deg,rgba(15,132,82,.10),rgba(207,29,108,.06))}
+body.day .st-load b{color:var(--mint)}
+body.day #start{background:linear-gradient(180deg,#7fc0ee 0%,#bfe2f5 48%,#e9f3dc 100%)}
+body.day #startBtn{color:#183526;text-shadow:0 0 22px rgba(255,255,255,.9)}
+body.day #startBtn:hover:not(:disabled),body.day #startBtn:focus-visible{color:#0d2a1c;text-shadow:0 0 6px #fff,0 0 24px #fff6c8,0 0 50px #ffd34d}
+body.day .st-top,body.day .st-foot{color:#3f5a68}
+body.day .st-mood button{background:rgba(255,255,255,.45)}
+body.day .st-quick{border-color:rgba(36,66,44,.3)}
+body.day .quick h2{color:var(--cyan)}
+/* with the panel open on desktop, keep the mood and sound buttons visible to the left of it */
+@media (min-width:861px){.hud-r{transition:margin-right .45s ease}body.panel-open .hud-r{margin-right:calc(min(460px,42vw) + 4px)}}
+
+/* "Play" cards (Beat me in 9 moves, Knight's tour): look and feel like a button */
+.playcard{position:relative;overflow:hidden;gap:6px;padding:16px 18px;transition:box-shadow .25s,transform .25s,border-color .25s,background .25s}
+.playcard::after{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.16) 50%,transparent 65%);transform:translateX(-120%);animation:pcShine 4.5s ease-in-out infinite;pointer-events:none}
+@keyframes pcShine{0%,62%{transform:translateX(-120%)}100%{transform:translateX(120%)}}
+.playcard:hover,.playcard:focus-visible{transform:translateY(-2px);box-shadow:0 10px 26px -12px var(--mint),inset 0 0 30px -10px var(--mint)}
+.playcard:active{transform:translateY(0) scale(.99)}
+.pc-go{justify-self:start;display:inline-flex;align-items:center;gap:8px;margin-top:6px;padding:9px 16px;font:700 12.5px var(--f-ui);letter-spacing:.12em;text-transform:uppercase;color:#0b0812;background:var(--mint);clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);transition:filter .2s,gap .2s}
+.pc-go i{font-style:normal;font-size:10px;transition:transform .2s}
+.playcard:hover .pc-go,.playcard:focus-visible .pc-go{filter:brightness(1.1);gap:12px}
+.playcard:hover .pc-go i{transform:translateX(2px)}
+@media (prefers-reduced-motion:reduce){.playcard::after{animation:none;display:none}}
+body.day .playcard{background:linear-gradient(120deg,#e8f6ec,#fdf6e6);border-color:#3aa86f;box-shadow:0 4px 14px -8px rgba(20,90,50,.35)}
+body.day .playcard:hover,body.day .playcard:focus-visible{border-color:var(--mint);box-shadow:0 12px 26px -12px rgba(15,132,82,.55)}
+body.day .playcard::after{background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.7) 50%,transparent 65%)}
+body.day .pc-go{color:#fff;background:linear-gradient(180deg,#19a065,#0f8452)}
+/* day accents for the open section: softer, warmer than the night neon */
+body.day #panel::before{height:3px}
+
+/* About: player card with photo */
+.pcard{display:grid;grid-template-columns:112px minmax(0,1fr);gap:16px;align-items:center;margin:0 0 18px;padding:14px;border:1px solid var(--line);background:linear-gradient(120deg,color-mix(in srgb,var(--sec) 10%,transparent),rgba(255,255,255,.02))}
+.pc-photo{position:relative;width:112px;height:112px;display:grid;place-items:center;overflow:hidden;background:linear-gradient(140deg,color-mix(in srgb,var(--sec) 35%,#0d0a18),#0d0a18);border:2px solid var(--sec);box-shadow:0 0 18px -4px var(--sec);clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px)}
+.pc-photo span{font:700 38px var(--f-ui);letter-spacing:.04em;color:var(--sec)}
+.pc-photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 30%}
+.pc-info{display:grid;gap:3px;min-width:0}
+.pc-tag{font:600 10.5px var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--sec)}
+.pc-info b{font-size:17px;line-height:1.25;color:var(--cream)}
+.pc-info em{font-style:normal;font-size:13.5px;color:var(--text)}
+.pc-meta{font:400 12px var(--f-mono);color:var(--muted)}
+.pc-meta::before{content:"◉ ";color:var(--sec)}
+@media (max-width:420px){.pcard{grid-template-columns:84px minmax(0,1fr);gap:12px}.pc-photo{width:84px;height:84px}.pc-photo span{font-size:28px}}
+body.day .pcard{background:linear-gradient(120deg,color-mix(in srgb,var(--sec) 12%,#fff),#fffdf6)}
+body.day .pc-photo{background:linear-gradient(140deg,color-mix(in srgb,var(--sec) 30%,#fff),#eef6fa);box-shadow:0 6px 16px -8px rgba(0,0,0,.35)}
+body.day .pc-photo span,body.day .pc-tag,body.day .pc-meta::before{color:color-mix(in srgb,var(--sec) 60%,#0f140f)}
+.quick .q-photo{display:block;width:96px;height:96px;margin:0 0 16px;object-fit:cover;object-position:50% 30%;border:2px solid var(--cyan);clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px)}
