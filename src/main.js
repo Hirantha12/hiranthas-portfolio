@@ -118,6 +118,10 @@ function start(autoStart) {
     scene.fog.density = mood.fogDensity() / Math.pow(K, 1.4);
     const ls = (1 + (K - 1) * 0.9) * (innerWidth < 700 ? 1.15 : 1);
     for (const key in giants) { const g = giants[key]; g.lw = g.baseLw * ls; g.label.scale.set(g.lw, (g.lw * 200) / 640, 1); }
+    // Phones (tall screens): the scoresheet stands nearer the front, so it (and its My story / CV
+    // tag) is in view. It sits between the Knight's tour squares, clear of his landing spots.
+    const tall = a < 0.75;
+    sheet.g.position.set(tall ? 3.0 : 6.6, 0.02, tall ? 9.0 : 7.2); sheet.g.rotation.y = tall ? -0.1 : -0.32;
   }
   // The help line above the menu: what you can do on the board, each action in bold.
   const hintText = () => {
@@ -270,7 +274,8 @@ function start(autoStart) {
     Snd.tick();
     if (REDUCE) { downloadCV(); cvToast(); return; }
     copying = true;
-    sheetMeshes[2].getWorldPosition(tagPos).project(camera); // the paper on the clipboard
+    // it starts from the paper on the clipboard
+    sheetMeshes[2].getWorldPosition(tagPos).project(camera);
     const sx = ((tagPos.x + 1) / 2) * innerWidth, sy = ((1 - tagPos.y) / 2) * innerHeight;
     const el = document.createElement('div'); el.className = 'cvfly'; el.setAttribute('aria-hidden', 'true');
     el.innerHTML = `<div class="cvp-head">♞ OFFICIAL SCORESHEET</div><div class="cvp-name">${PROFILE.name.toUpperCase()}</div>
@@ -290,7 +295,10 @@ function start(autoStart) {
     tagPos.copy(at).project(camera);
     if (tagPos.z > 1 || Math.abs(tagPos.x) > 1.05 || Math.abs(tagPos.y) > 1.05) { el.hidden = true; return; }
     el.classList.toggle('compact', size.compact);
-    const x = Math.min(innerWidth - 8, Math.max(8, ((tagPos.x + 1) / 2) * innerWidth)); // keep it on screen
+    el.hidden = false;
+    // keep the whole tag on screen (a centred tag needs half its width of room on each side)
+    const half = anchor.includes('-50%') ? (el.offsetWidth * size.scale) / 2 : 0;
+    const x = Math.min(innerWidth - 8 - half, Math.max(8 + half, ((tagPos.x + 1) / 2) * innerWidth));
     el.style.transform = `translate(${x}px, ${((1 - tagPos.y) / 2) * innerHeight}px) ${anchor} scale(${size.scale.toFixed(3)})`;
     el.hidden = false;
   }
@@ -306,6 +314,7 @@ function start(autoStart) {
     if (at && camera.position.z > at.z + 1) pinTag(hTag, at, 'translate(-100%, -50%)', size); // left of him
     else hTag.hidden = true;
 
+    // top edge of the clipboard; hidden when orbiting round to its back
     // top edge of the clipboard; hidden when orbiting round to its back
     sheetMeshes[1].getWorldPosition(tagTop).y += 0.25;
     if (camera.position.z > tagTop.z - 1) {
