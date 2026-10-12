@@ -4,30 +4,49 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Hirantha Rathnayaka · Full Stack Software Engineer</title>
-  <meta name="description" content="Hirantha Rathnayaka, Full Stack Software Engineer in Colombo, Sri Lanka. React, Next.js, Node.js and NestJS projects, shown in a rainy neon 3D chess plaza.">
+  <meta name="description" content="Hirantha Rathnayaka, Full Stack Software Engineer in Colombo, Sri Lanka. React, Next.js, Node.js and NestJS projects, shown in a 3D chess plaza: a rainy neon night or a sunny mountain valley.">
   <meta name="theme-color" content="#07060c">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <!-- Update og:url once you have a domain; add /public/og.jpg (1200x630) for link previews. -->
+  <!-- Link previews (LinkedIn, WhatsApp, Slack, X). Image: public/og.jpg, 1200x630. -->
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Hirantha's Gambit · Hirantha Rathnayaka">
-  <meta property="og:description" content="Full Stack Software Engineer. Press START and explore my projects on a 3D chessboard.">
-  <meta property="og:image" content="/og.jpg">
+  <meta property="og:url" content="https://hiranthas-portfolio.vercel.app/">
+  <meta property="og:title" content="Hirantha Rathnayaka · Full Stack Software Engineer">
+  <meta property="og:description" content="Full Stack Software Engineer in Colombo. Press START and explore my projects on a 3D chessboard, by rainy neon night or sunny day.">
+  <meta property="og:image" content="https://hiranthas-portfolio.vercel.app/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Hirantha Rathnayaka, Full Stack Software Engineer">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://hiranthas-portfolio.vercel.app/og.jpg">
 </head>
 <body>
+  <script>
+    // The sunny mood was picked last time: style the START screen for it before anything shows.
+    try { var m0 = new URLSearchParams(location.search).get('mood') || localStorage.getItem('hg-mood'); if (m0 === 'day') document.body.classList.add('day'); } catch (e) {}
+  </script>
   <canvas id="c" aria-label="3D chess plaza. Use the menu at the bottom to open each section."></canvas>
 
   <div id="start">
     <div class="st-top">Hirantha Rathnayaka · Full Stack Software Engineer</div>
+    <div class="st-mood" role="group" aria-label="Choose your mood">
+      <button type="button" data-mood="night" aria-pressed="true"><span class="mi" aria-hidden="true">☾</span><b>Rainy night</b><small>Neon, rain and thunder</small></button>
+      <button type="button" data-mood="day" aria-pressed="false"><span class="mi" aria-hidden="true">☀&#xFE0E;</span><b>Sunny day</b><small>Valley, birds and a stream</small></button>
+    </div>
     <button id="startBtn" disabled aria-label="Start">START</button>
     <div class="st-load" id="stLoad">Setting up the board…</div>
     <button class="st-quick" id="quickBtn">Quick view, no 3D</button>
-    <div class="st-foot">Best with sound on · rain, thunder and wooden pieces</div>
+    <div class="st-foot" id="stFoot">Best with sound on · rain, thunder and wooden pieces</div>
   </div>
 
   <header class="hud">
     <div class="brand"><span class="logo" aria-hidden="true">♞</span><div><b>Hirantha Rathnayaka</b><span>Full Stack Software Engineer · Colombo</span></div></div>
-    <button class="chip" id="snd" aria-pressed="true"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span><span id="sndLabel">Sound on</span></button>
+    <div class="hud-r">
+      <div class="moodsw" role="group" aria-label="Mood">
+        <button type="button" data-mood="night" aria-pressed="true" title="Rainy night"><span class="mi" aria-hidden="true">☾</span><span class="ml">Night</span></button>
+        <button type="button" data-mood="day" aria-pressed="false" title="Sunny day"><span class="mi" aria-hidden="true">☀&#xFE0E;</span><span class="ml">Day</span></button>
+      </div>
+      <button class="chip" id="snd" aria-pressed="true"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span><span id="sndLabel">Sound on</span></button>
+    </div>
   </header>
 
   <nav class="dock" id="dock" aria-label="Sections">
@@ -57,6 +76,7 @@
   <main id="quick" class="quick" hidden>
     <button class="btn-sm close-q" id="quickClose">Back to the 3D board</button>
     <div class="quick-in">
+      <img class="q-photo" src="/hirantha.jpg" alt="Hirantha Rathnayaka" width="96" height="96" onerror="this.remove()">
       <h1>Hirantha Rathnayaka</h1>
       <p class="role">Full Stack Software Engineer · Colombo, Sri Lanka</p>
       <p>I build production web apps end to end: React and Next.js front ends, Node.js, Express and NestJS services, SQL and NoSQL data, deployed on AWS and Azure. 4+ years of experience and 10+ delivered projects. All-Island chess 2nd runner-up.</p>
