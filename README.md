@@ -1,6 +1,8 @@
 # Hirantha's Gambit
 
-A game-style 3D portfolio: press START, rain and thunder begin, giant chess pieces drop onto a neon plaza, and each piece flies the camera into a section. Projects sit on the first rank of a chessboard. Built with Three.js, GSAP and Vite.
+A game-style 3D portfolio: pick a mood, press START, and giant chess pieces drop onto the plaza, then each piece flies the camera into a section. Projects sit on the first rank of a chessboard. Built with Three.js, GSAP and Vite.
+
+Two moods, same features: a **rainy neon night** (rain, lightning, thunder) and a **sunny day** in a mountain valley (sun, clouds, trees, a stream, wildflowers, birds and butterflies). Visitors choose on the START screen or switch any time with the ☾/☀ buttons; the choice is remembered. `?mood=day` or `?mood=night` in the URL forces one.
 
 ## Run it
 
@@ -27,9 +29,11 @@ npm run preview   # serve the build locally
 | `src/main.js` | Renderer, bloom, camera flights, 360° orbit, clicking/hover, intro, render loop. |
 | `src/scene/world.js` | Builds the plaza: lights, floor, city, café kiosk, giant pieces, board, scoresheet, rain. |
 | `src/scene/pieces.js` | Procedural chess pieces (lathe + extruded knight). |
+| `src/scene/mood.js` | The night / sunny-day switch: blends every light, colour, the fog, bloom and rain, with a passing mist while it changes. |
+| `src/scene/valley.js` | The sunny-day scenery (sky, sun, clouds, mountains, trees, stream, flowers, birds). Downloaded only when someone picks the sunny mood. |
 | `src/scene/canvas.js` | Canvas helpers for signs, labels and textures. |
 | `src/ui/panel.js` | The side panel content for each section. |
-| `src/audio/sound.js` | Rain, thunder, piece clacks and music, generated with Web Audio (no audio files). |
+| `src/audio/sound.js` | Rain and thunder (night), birdsong, breeze and a stream (day), piece clacks and music, generated with Web Audio (no audio files). |
 | `src/style.css` | HUD, dock, panel and quick view styles. |
 
 ## Common changes
