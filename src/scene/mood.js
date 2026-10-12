@@ -119,8 +119,14 @@ export function createMood({ scene, renderer, camera, W, bloom, touch, reduce, l
   }
 
   // Start in the stored mood: the valley loads while the START screen is up.
-  if (st.target === 'day') { document.body.classList.add('day'); st.t = 1; ensureValley().catch(() => {}); }
+  // The scene is always built in night colours first and switched to day a moment later
+  // (after the page has finished setting up), so anything that remembers "the starting sky",
+  // like the lightning, always remembers the night one. This is what caused the white night.
   apply();
+  if (st.target === 'day') {
+    document.body.classList.add('day'); ensureValley().catch(() => {});
+    queueMicrotask(() => { if (st.target === 'day' && !st.tween) { st.t = 1; apply(); } });
+  }
 
   return {
     set, apply, ensureValley, fogDensity,
