@@ -7,6 +7,10 @@ export const PROFILE = {
   email: 'hiranthaviraj@gmail.com',
   github: 'https://github.com/Hirantha12',
   linkedin: 'https://www.linkedin.com/in/hirantha-rathnayaka',
+  // Your photo: put a square image (800×800 or larger) at public/hirantha.jpg. Until it's there,
+  // the About panel shows your initials instead.
+  photo: '/hirantha.jpg',
+  now: 'Software Engineer at Softvil Technologies',
 };
 
 export const GLYPH = { king: '♔', queen: '♕', rook: '♖', bishop: '♗', knight: '♘', pawn: '♙' };
