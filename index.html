@@ -60,7 +60,11 @@
   <div id="hint"></div>
   <div id="tip"></div>
   <button id="hTag" class="htag" hidden aria-label="Talk to Hirantha"><i aria-hidden="true">💬</i><span><b>HIRANTHA</b><small>click to talk</small></span></button>
-  <button id="sTag" class="htag stag" hidden aria-label="Read my story (About me)"><i aria-hidden="true">📋</i><span><b>MY STORY</b><small>click to read</small></span></button>
+  <div id="sTag" class="htag stag split" hidden>
+    <button type="button" class="st-story" aria-label="Read my story (About me)"><i aria-hidden="true">📋</i><span><b>MY STORY</b><small>click to read</small></span></button>
+    <button type="button" class="st-cv" aria-label="Download my CV (PDF)"><i aria-hidden="true">⬇</i><span><b>CV</b><small>take a copy</small></span></button>
+  </div>
+  <div id="cvToast" class="cvtoast" role="status" hidden></div>
 
   <aside id="panel" hidden aria-live="polite">
     <div class="p-head">
@@ -79,6 +83,7 @@
       <img class="q-photo" src="/hirantha.jpg" alt="Hirantha Rathnayaka" width="96" height="96" onerror="this.remove()">
       <h1>Hirantha Rathnayaka</h1>
       <p class="role">Full Stack Software Engineer · Colombo, Sri Lanka</p>
+      <a class="q-cv" href="/Hirantha_Rathnayaka_CV.pdf" download="Hirantha_Rathnayaka_CV.pdf">⬇ Download CV (PDF)</a>
       <p>I build production web apps end to end: React and Next.js front ends, Node.js, Express and NestJS services, SQL and NoSQL data, deployed on AWS and Azure. 4+ years of experience and 10+ delivered projects. All-Island chess 2nd runner-up.</p>
 
       <h2>Projects</h2>
