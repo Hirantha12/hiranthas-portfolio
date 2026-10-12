@@ -449,3 +449,38 @@ body.day .pcard{background:linear-gradient(120deg,color-mix(in srgb,var(--sec) 1
 body.day .pc-photo{background:linear-gradient(140deg,color-mix(in srgb,var(--sec) 30%,#fff),#eef6fa);box-shadow:0 6px 16px -8px rgba(0,0,0,.35)}
 body.day .pc-photo span,body.day .pc-tag,body.day .pc-meta::before{color:color-mix(in srgb,var(--sec) 60%,#0f140f)}
 .quick .q-photo{display:block;width:96px;height:96px;margin:0 0 16px;object-fit:cover;object-position:50% 30%;border:2px solid var(--cyan);clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px)}
+
+/* ---------- CV download ---------- */
+.pcard .cv-btn{grid-column:auto}
+.cv-btn{justify-self:start;display:inline-flex;align-items:center;gap:10px;margin-top:8px;padding:8px 14px 8px 10px;text-decoration:none;color:#0b0812;background:var(--sec);clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);transition:filter .2s,transform .2s}
+.cv-btn i{font-style:normal;display:grid;place-items:center;width:24px;height:24px;font-size:14px;background:rgba(0,0,0,.14)}
+.cv-btn span{display:grid;line-height:1.15}
+.cv-btn b{font-size:13px;letter-spacing:.1em;text-transform:uppercase}
+.cv-btn small{font:500 10.5px var(--f-mono);opacity:.75}
+.cv-btn:hover,.cv-btn:focus-visible{filter:brightness(1.1);transform:translateY(-1px)}
+body.day .cv-btn{color:#fff;background:color-mix(in srgb,var(--sec) 62%,#0f140f)}
+.crow a.btn-sm{text-decoration:none;font:500 11px var(--f-mono);white-space:nowrap}
+/* the scoresheet tag on the board: "My story" and "CV" side by side */
+.stag.split{padding:0;gap:0;overflow:hidden}
+.stag.split button{display:flex;align-items:center;gap:7px;padding:5px 13px 5px 9px;background:none;border:0;color:inherit;cursor:pointer}
+.stag.split .st-cv{border-left:1px solid var(--amber);padding-left:11px}
+.stag.split button:hover,.stag.split button:focus-visible{background:rgba(255,181,71,.16);outline:none}
+.htag.compact.split button{padding:3px 9px 3px 7px;gap:5px}
+@media (max-width:600px){.htag.compact.split button{padding:2px 7px 2px 5px;gap:4px}}
+/* the flying carbon copy */
+.cvfly{position:fixed;left:0;top:0;z-index:30;width:250px;height:330px;padding:16px 16px 0;pointer-events:none;background:#f1e9d6;color:#1d1730;box-shadow:0 24px 50px -12px rgba(0,0,0,.55),0 0 0 1px rgba(0,0,0,.08);font-family:var(--f-ui);overflow:hidden}
+.cvfly::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(120,100,80,.035) 3px 4px);pointer-events:none}
+.cvp-head{margin:-16px -16px 12px;padding:9px 14px;background:#1d1730;color:#f1e9d6;font-weight:700;font-size:13px;letter-spacing:.06em}
+.cvp-name{font-weight:700;font-size:19px;letter-spacing:.02em}
+.cvp-role{margin-top:2px;font-weight:600;font-size:13px;color:#c2185b}
+.cvp-lines{margin-top:14px;display:grid;gap:13px}
+.cvp-lines i{display:block;height:1px;background:rgba(29,23,48,.25)}
+.cvp-lines i:nth-child(3n+1){width:72%}
+.cvp-stamp{position:absolute;right:18px;bottom:26px;padding:4px 12px;border:3px solid #c2185b;color:#c2185b;font:700 22px var(--f-ui);letter-spacing:.2em;transform:rotate(-14deg);opacity:.85}
+.cvtoast{position:fixed;z-index:31;left:50%;top:calc(70px + env(safe-area-inset-top,0px));transform:translate(-50%,-10px);display:flex;align-items:center;gap:12px;padding:10px 16px 10px 12px;background:var(--panel);border:1px solid var(--amber);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 0 18px -6px var(--amber);opacity:0;transition:opacity .35s,transform .35s;pointer-events:none}
+.cvtoast.on{opacity:1;transform:translate(-50%,0)}
+.cvtoast i{font-style:normal;display:grid;place-items:center;width:28px;height:28px;color:#0b0812;background:var(--amber)}
+.cvtoast span{display:grid;line-height:1.3}
+.cvtoast b{font:600 13px var(--f-mono);color:var(--cream)}
+.cvtoast small{font-size:12.5px;color:var(--muted)}
+.quick .q-cv{display:inline-block;margin:6px 0 4px;padding:9px 14px;border:1px solid var(--cyan);color:var(--cream);text-decoration:none;font:600 13px var(--f-mono);letter-spacing:.06em}
