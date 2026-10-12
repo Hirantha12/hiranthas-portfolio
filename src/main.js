@@ -18,9 +18,10 @@ import './style.css';
 import { SECTIONS, PROJECTS, GLYPH } from './data/content.js';
 import { Snd } from './audio/sound.js';
 import { setMaxAnisotropy } from './scene/canvas.js';
-import { buildWorld, P } from './scene/world.js';
+import { buildWorld } from './scene/world.js';
 import { createGame } from './scene/game.js';
 import { createJourney } from './scene/journey.js';
+import { createMood, storedMood } from './scene/mood.js';
 import { createPanel } from './ui/panel.js';
 import { createChat } from './ui/chat.js';
 import { warm } from './ui/preview.js';
@@ -77,22 +78,23 @@ function start(autoStart) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x07060c);
   scene.fog = new THREE.FogExp2(0x0b0815, 0.026);
-  const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 260);
+  const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 400);
 
   /* ---------- bloom ---------- */
-  let composer = null;
+  let composer = null, bloom = null;
   try {
     const rt = new THREE.WebGLRenderTarget(innerWidth * DPR, innerHeight * DPR, { type: THREE.UnsignedByteType, samples: TOUCH ? 0 : 4 });
     composer = new EffectComposer(renderer, rt);
     composer.setPixelRatio(DPR);
     composer.setSize(innerWidth, innerHeight);
     composer.addPass(new RenderPass(scene, camera));
-    composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.75, 0.5, 0.72));
-  } catch (e) { composer = null; }
+    bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.75, 0.5, 0.72);
+    composer.addPass(bloom);
+  } catch (e) { composer = null; bloom = null; }
 
   const W = buildWorld(scene, { touch: TOUCH, reduce: REDUCE });
   if (import.meta.env.DEV) window.__dbg = { scene, camera, renderer, get composer() { return composer; }, set composer(v) { composer = v; }, W };
-  const { giants, giantMeshes, sqPos, decor, projPieces, projMeshes, hl, sheet, sheetMeshes, signMat, signLight, flash, PIECE_SCALE } = W;
+  const { giants, giantMeshes, sqPos, decor, projPieces, projMeshes, hl, sheet, sheetMeshes, signMat, flash, PIECE_SCALE } = W;
 
   /* =========================================================
      CAMERA + VIEWS
@@ -113,18 +115,34 @@ function start(autoStart) {
     const fov = clamp(THREE.MathUtils.radToDeg(2 * Math.atan(BASE_HALF_W / a)), 40, 58);
     K = clamp(BASE_HALF_W / (Math.tan(THREE.MathUtils.degToRad(fov / 2)) * a), 1, 1.6);
     camera.fov = fov; camera.aspect = a; camera.updateProjectionMatrix();
-    scene.fog.density = 0.026 / Math.pow(K, 1.4);
+    scene.fog.density = mood.fogDensity() / Math.pow(K, 1.4);
     const ls = (1 + (K - 1) * 0.9) * (innerWidth < 700 ? 1.15 : 1);
     for (const key in giants) { const g = giants[key]; g.lw = g.baseLw * ls; g.label.scale.set(g.lw, (g.lw * 200) / 640, 1); }
   }
-  const hintText = () => (innerWidth < 700
-    ? (TOUCH ? 'Tap a piece · drag to orbit · pinch to zoom' : 'Click a piece · drag to orbit')
-    : (TOUCH ? 'Tap a giant piece · drag to orbit 360° · pinch to zoom · double-tap to reset' :'Click a giant piece · drag to orbit 360° · scroll to zoom · double-click to reset'));
+  // The help line above the menu: what you can do on the board, each action in bold.
+  const hintText = () => {
+    const tips = TOUCH
+      ? [['Tap', 'a giant piece to open it'], ['Drag', 'to look around'], ['Pinch', 'to zoom'], ['Double-tap', 'to reset']]
+      : [['Click', 'a giant piece to open it'], ['Drag', 'to look around 360°'], ['Scroll', 'to zoom'], ['Double-click', 'to reset']];
+    return tips.slice(0, innerWidth < 520 ? 3 : 4).map(([k, v]) => `<span><b>${k}</b> ${v}</span>`).join('<i aria-hidden="true">·</i>');
+  };
   const portraitK = () => K;
+  // Rainy night or sunny day (see scene/mood.js). Chosen on the START screen or with the ☾/☀ switch.
+  const mood = createMood({
+    scene, renderer, camera, W, bloom, touch: TOUCH, reduce: REDUCE, lensK: () => K,
+    onChange: (what, v) => {
+      if (what === 'mood') { stopStorm(); syncMood(v); game.setDay(v === 'day'); if (mode === 'home' && started) flyTo(homeView(), 2.8, 'sine.inOut'); }
+      if (what === 'valley') v.onFlock = () => setTimeout(() => Snd.bird(), 600 + Math.random() * 1500);
+    },
+  });
+  if (import.meta.env.DEV) window.__dbg.mood = mood;
   applyLens();
   const isDesktop = () => innerWidth > 860;
 
-  function homeView() { const k = portraitK(); return { pos: new V3(0, 6.4 + (k - 1) * 1.5, 17.5 * k), tgt: new V3(0, 2.1 - (k - 1) * 0.8, -1.5) }; }
+  function homeView() {
+    const k = portraitK(), sky = mood.mood === 'day' ? 1 : 0; // by day the view tilts up a little to show the sky and the sun
+    return { pos: new V3(0, 6.4 + (k - 1) * 1.5 + sky * 0.3, 17.5 * k), tgt: new V3(0, 2.1 - (k - 1) * 0.8 + sky * 1.5, -1.5) };
+  }
   function sectionView(key) {
     const k = Math.min(portraitK(), 2.2);
     if (key === 'projects') { const t = new V3(0, 1.1, 0.45); return { pos: t.clone().add(new V3(0, 4.4, 5.4).multiplyScalar(k)), tgt: t }; }
@@ -177,6 +195,7 @@ function start(autoStart) {
     scene, camera, board: W.board, boardTop: W.boardTop, sqPos, ivory: W.ivoryS, ebony: W.ebonyS, reduce: REDUCE,
     onChange: (info) => panel.gameUpdate(info),
   });
+  game.setDay(mood.mood === 'day');
   const panel = createPanel({
     onSelectProject: (i) => selectProject(i), getActiveProject: () => activeProject,
     onGame: (action) => {
@@ -186,6 +205,7 @@ function start(autoStart) {
       else if (action === 'exit') exitGame();
       else if (action === 'contact') goTo('contact');
       else if (action === 'shake') game.shake();
+      else if (action.startsWith('g-')) game.action(action);
     },
   });
 
@@ -546,6 +566,7 @@ function start(autoStart) {
   }
   function lightning() {
     if (import.meta.env.DEV && window.__noLightning) return;
+    if (!mood.stormy) return; // no storms on a sunny day
     const near = Math.random();                       // 0: far away … 1: close
     const a = (Math.random() * 2 - 1) * 1.05;         // direction, out beyond the kiosk
     const R = 112 - near * 22, bx = Math.sin(a) * R, bz = -Math.cos(a) * R;
@@ -565,6 +586,10 @@ function start(autoStart) {
   }
   if (import.meta.env.DEV) Object.assign(window.__dbg, { lightning, flashAt: (v) => { L.v = v; boltOn = v > 0; bolt.visible = v > 0; applyFlash(); }, makeBolt });
   const scheduleLightning = () => setTimeout(() => { lightning(); scheduleLightning(); }, 15000 + Math.random() * 17000);
+  // Switching to day in the middle of a flash: end it at once (the mood now owns the sky colour).
+  function stopStorm() {
+    gsap.killTweensOf(L); L.v = 0; boltOn = false; bolt.visible = false; boltMat.opacity = 0; flash.intensity = 0;
+  }
 
   /* =========================================================
      INTRO
@@ -587,10 +612,10 @@ function start(autoStart) {
     });
     const ft = gsap.timeline({ delay: REDUCE ? 0.6 : 2.3, onComplete: () => { signOn = true; } });
     if (!REDUCE) [0.9, 0.1, 0.7, 0.05, 1, 0.3, 1].forEach((o, i) => ft.to(signMat, { opacity: o, duration: 0.06 + i * 0.01 }));
-    ft.to(signMat, { opacity: 1, duration: 0.2 }).to(signLight, { intensity: P(1.4), duration: 0.4 }, '<');
+    ft.to(signMat, { opacity: 1, duration: 0.2 }).add(() => mood.signOn(), '<');
     setTimeout(() => {
       mode = 'home'; updateDock();
-      $('#hint').textContent = hintText();
+      $('#hint').innerHTML = hintText();
       document.body.classList.add('ready');
       if (deepLink && SECTIONS[deepLink]) goTo(deepLink);
       setTimeout(lightning, 4000); scheduleLightning();
@@ -598,11 +623,12 @@ function start(autoStart) {
   }
 
   const startBtn = $('#startBtn');
+  let isReady = false;
   // Compile every shader before START, including pieces that only appear later, so the intro
   // and the first visit to Projects don't stutter. compileAsync doesn't block the page.
   function ready() {
     startBtn.disabled = false;
-    stLoad.innerHTML = `<b>Ready.</b> 64 squares, ${PROJECTS.length} projects, 1 rainy night`;
+    isReady = true; syncMood(mood.mood);
     startBtn.focus({ preventScroll: true });
     if (autoStart) startBtn.click(); // embedded: START was already pressed
   }
@@ -610,16 +636,40 @@ function start(autoStart) {
   hidden.forEach((o) => { o.visible = true; });
   Promise.resolve(renderer.compileAsync(scene, camera)).catch(() => {}).finally(() => {
     hidden.forEach((o) => { o.visible = false; });
-    ready();
+    mood.ready().catch(() => {}).finally(ready); // a sunny-day visitor's valley is built by now too
   });
   let started = false; // nothing is drawn behind the START screen
   startBtn.addEventListener('click', () => {
-    startBtn.disabled = true; started = true;
-    Snd.init(); syncSnd();
-    gsap.to('#start', { opacity: 0, duration: 0.9, ease: 'power2.out', onComplete: () => { $('#start').hidden = true; } });
-    runIntro(location.hash.slice(1));
-    loadAvatar();
+    startBtn.disabled = true;
+    Snd.mood = mood.mood; Snd.init(); syncSnd();
+    const go = () => {
+      started = true;
+      gsap.to('#start', { opacity: 0, duration: 0.9, ease: 'power2.out', onComplete: () => { $('#start').hidden = true; } });
+      runIntro(location.hash.slice(1));
+      loadAvatar();
+    };
+    // picked "Sunny day" just before pressing START: wait for the valley (usually a moment)
+    if (mood.mood === 'day') { stLoad.textContent = 'Growing the valley…'; mood.ready().catch(() => mood.set('night', { instant: true })).finally(go); } else go();
   }, { once: true });
+
+  /* ---------- mood switch: START screen choice and the ☾/☀ buttons in the corner ---------- */
+  const moodBtns = [...document.querySelectorAll('[data-mood]')];
+  const MOOD_TEXT = {
+    night: { foot: 'Best with sound on · rain, thunder and wooden pieces', ready: 'rainy night', color: '#07060c' },
+    day: { foot: 'Best with sound on · birdsong, a stream and wooden pieces', ready: 'sunny day', color: '#aed8f3' },
+  };
+  function syncMood(m) {
+    moodBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mood === m)));
+    $('#stFoot').textContent = MOOD_TEXT[m].foot;
+    if (isReady && !started) stLoad.innerHTML = `<b>Ready.</b> 64 squares, ${PROJECTS.length} projects, 1 ${MOOD_TEXT[m].ready}`;
+    const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = MOOD_TEXT[m].color;
+  }
+  moodBtns.forEach((b) => b.addEventListener('click', () => {
+    const m = b.dataset.mood; if (m === mood.mood) return;
+    Snd.setMood(m); Snd.tick();
+    mood.set(m, { instant: !started }); // behind the START screen nothing is drawn, so no blend
+  }));
+  syncMood(mood.mood);
 
   /* =========================================================
      LOOP + RESIZE
@@ -648,9 +698,10 @@ function start(autoStart) {
     if (!started) { last = now; return; } // the START screen covers the canvas: skip the work
     const rawDt = (now - last) / 1000;
     const dt = Math.min(rawDt, 0.05); last = now; elapsed += dt;
-    W.updateRain(dt);
+    if (mood.t < 0.999) W.updateRain(dt);
+    mood.update(dt);
     for (const k in giants) { const g = giants[k]; g.label.position.y = g.ly + Math.sin(elapsed * 1.3 + g.phase) * 0.12; }
-    if (signOn && !REDUCE && Math.random() < 0.004) { signMat.opacity = 0.35; setTimeout(() => { signMat.opacity = 1; }, 60 + Math.random() * 100); }
+    if (signOn && mood.stormy && !REDUCE && Math.random() < 0.004) { signMat.opacity = 0.35; setTimeout(() => { signMat.opacity = 1; }, 60 + Math.random() * 100); }
     if (hl.visible) hl.material.opacity = 0.35 + Math.sin(elapsed * 4) * 0.15;
     codeT += dt; if (codeT > 0.07) { W.drawCode(codeT); codeT = 0; }
     if (ptrMoved && !TOUCH && !down) {
@@ -682,7 +733,7 @@ function start(autoStart) {
   addEventListener('resize', () => {
     applyLens();
     if (game.active) game.layout(portrait()); // phone rotated: move the clock
-    if (document.body.classList.contains('ready')) $('#hint').textContent = hintText();
+    if (document.body.classList.contains('ready')) $('#hint').innerHTML = hintText();
     renderer.setSize(innerWidth, innerHeight);
     if (composer) composer.setSize(innerWidth, innerHeight);
     if (mode !== 'intro') {
