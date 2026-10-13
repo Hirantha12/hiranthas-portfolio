@@ -78,47 +78,209 @@
   <!-- Quick view: real HTML that recruiters, screen readers and search engines can read.
        Keep it in sync with src/data/content.js. -->
   <main id="quick" class="quick" hidden>
-    <button class="btn-sm close-q" id="quickClose">Back to the 3D board</button>
-    <div class="quick-in">
-      <img class="q-photo" src="/hirantha.jpg" alt="Hirantha Rathnayaka" width="96" height="96" onerror="this.remove()">
-      <h1>Hirantha Rathnayaka</h1>
-      <p class="role">Full Stack Software Engineer · Colombo, Sri Lanka</p>
-      <a class="q-cv" href="/Hirantha_Rathnayaka_CV.pdf" download="Hirantha_Rathnayaka_CV.pdf">⬇ Download CV (PDF)</a>
-      <p>I build production web apps end to end: React and Next.js front ends, Node.js, Express and NestJS services, SQL and NoSQL data, deployed on AWS and Azure. 4+ years of experience and 10+ delivered projects. All-Island chess 2nd runner-up.</p>
+    <div class="q-top">
+      <div class="q-theme" role="group" aria-label="Theme">
+        <button type="button" data-mood="night" aria-pressed="true" title="Dark (rainy night)"><span aria-hidden="true">☾</span><span class="q-tl">Dark</span></button>
+        <button type="button" data-mood="day" aria-pressed="false" title="Light (sunny day)"><span aria-hidden="true">☀&#xFE0E;</span><span class="q-tl">Light</span></button>
+      </div>
+      <button class="q-back" id="quickClose">♞ Back to the 3D board</button>
+    </div>
+    <div class="q-glow" aria-hidden="true"></div>
+    <div class="q-wrap">
+      <!-- left column: who I am; stays in view on wide screens -->
+      <header class="q-side">
+        <img class="q-photo" src="/hirantha.jpg" alt="Hirantha Rathnayaka" width="88" height="88" onerror="this.remove()">
+        <h1>Hirantha Rathnayaka</h1>
+        <p class="q-role">Full Stack Software Engineer</p>
+        <p class="q-tag">I build production web apps end to end, from the interface to the cloud.</p>
+        <p class="q-where"><span class="q-dot"></span>Colombo, Sri Lanka · <span id="qTime">UTC+5:30</span></p>
 
-      <h2>Projects</h2>
-      <ul>
-        <li><a href="https://exploretureweb.vercel.app/" rel="noopener">Exploreture</a>: recruitment platform with job seeker, employer and admin portals. NestJS, MongoDB, Next.js, hexagonal architecture, JWT/OAuth.</li>
-        <li><a href="https://www.tuitionlanka.com/en" rel="noopener">TuitionLanka</a>: trilingual tutor-matching marketplace. Next.js, RTK Query, Azure Blob Storage.</li>
-        <li>VivoAssist: document-intelligence SaaS with natural-language search and citations. Next.js, TypeScript.</li>
-        <li><a href="https://softmatter.io/" rel="noopener">Softmatter by MAS Holdings</a>: corporate site with headless Shopify commerce. Gatsby, React.</li>
-        <li><a href="https://watawalatea.lk/" rel="noopener">Watawala Tea</a>: trilingual brand site with Firebase forms and SEO. Gatsby.</li>
-        <li><a href="https://www.nftautostore.io/" rel="noopener">NFT Auto Store</a>: e-commerce platform for NFT trading.</li>
-        <li><a href="https://katakaliveinconcert.com/" rel="noopener">Kataka Live In Concert</a>: concert event site. Next.js, React.</li>
-        <li><a href="https://nsdconsultingservices.com/" rel="noopener">NSD Consulting Services</a>: WordPress site with React components for a UAE consulting firm.</li>
-        <li>Hirantha's Gambit (this site): 3D chess-plaza portfolio with a playable chess game and an AI assistant. Three.js, GSAP, Vite, Web Audio, Transformers.js, Claude API.</li>
-      </ul>
+        <nav class="q-nav" aria-label="Quick view sections">
+          <a href="#q-about" data-q="q-about"><i></i>About</a>
+          <a href="#q-experience" data-q="q-experience"><i></i>Experience</a>
+          <a href="#q-projects" data-q="q-projects"><i></i>Projects</a>
+          <a href="#q-skills" data-q="q-skills"><i></i>Skills</a>
+          <a href="#q-education" data-q="q-education"><i></i>Education</a>
+          <a href="#q-activity" data-q="q-activity"><i></i>Activity</a>
+        </nav>
 
-      <h2>Experience</h2>
-      <ul>
-        <li><strong>Software Engineer</strong>, Softvil Technologies · Jun 2025 – Present</li>
-        <li><strong>Freelance Software Developer</strong>, Web development &amp; SEO · Aug 2024 – Jun 2025</li>
-        <li><strong>Web Developer</strong>, Stalione Group (Pvt) Ltd · Nov 2023 – Aug 2024</li>
-        <li><strong>Associate Software Engineer</strong>, Explorelogy · Mar 2023 – Nov 2023</li>
-        <li><strong>Associate UI/UX Engineer</strong>, Explorelogy · Sep 2022 – Feb 2023</li>
-        <li><strong>Software Engineer Intern</strong>, Explorelogy · Feb 2022 – Aug 2022</li>
-      </ul>
+        <div class="q-actions">
+          <a class="q-cv" href="/Hirantha_Rathnayaka_CV.pdf" download="Hirantha_Rathnayaka_CV.pdf">Download CV <span aria-hidden="true">↓</span></a>
+          <div class="q-social">
+            <a href="https://github.com/Hirantha12" rel="noopener" target="_blank" aria-label="GitHub" title="GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.56-.29-5.25-1.28-5.25-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.39-5.27 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg></a>
+            <a href="https://www.linkedin.com/in/hirantha-rathnayaka" rel="noopener" target="_blank" aria-label="LinkedIn" title="LinkedIn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.86 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28ZM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13ZM7.12 20.45H3.56V9h3.56v11.45ZM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0Z"/></svg></a>
+            <a href="mailto:hiranthaviraj@gmail.com" aria-label="Email" title="hiranthaviraj@gmail.com"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h17A1.5 1.5 0 0 1 22 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-17A1.5 1.5 0 0 1 2 18.5v-13Zm2.2.5 7.8 6.1L19.8 6H4.2ZM20 7.6l-7.4 5.8a1 1 0 0 1-1.2 0L4 7.6V18h16V7.6Z"/></svg></a>
+          </div>
+        </div>
+      </header>
 
-      <h2>Skills</h2>
-      <p>JavaScript, TypeScript, PHP, React.js, Next.js, Node.js, Express.js, NestJS, Gatsby.js, AngularJS, Tailwind CSS, PostgreSQL, MySQL, MongoDB, Firebase, AWS, Azure, Docker, CI/CD, GraphQL, Redux / RTK Query, WordPress, Agile / Scrum, RESTful API design, on-page SEO, UI/UX prototyping.</p>
+      <!-- right column: the details -->
+      <div class="q-main">
+        <section id="q-about" class="q-sec" aria-label="About">
+          <h2>About</h2>
+          <p>I'm a full stack software engineer with <b>4+ years</b> of experience shipping production web apps: <b>React</b> and <b>Next.js</b> front ends, <b>Node.js</b>, <b>Express</b> and <b>NestJS</b> services, SQL and NoSQL data, deployed on <b>AWS</b> and <b>Azure</b>.</p>
+          <p>Right now I'm a software engineer at <b>Softvil Technologies</b>, building an AI document-search platform, a trilingual tutoring marketplace and a recruitment platform. I started out in UI/UX design, so I care about how things feel as much as how they work, and lately I've been putting AI features inside products.</p>
+          <p>Off the keyboard I play chess (All-Island 2nd runner-up), which is why this portfolio is a chess plaza.</p>
+          <ul class="q-stats">
+            <li><b>4+</b><span>years shipping<br>web apps</span></li>
+            <li><b>10+</b><span>projects<br>delivered</span></li>
+            <li><b>2nd</b><span>All-Island<br>chess</span></li>
+          </ul>
+        </section>
 
-      <h2>Education</h2>
-      <p>Bachelor of Software Engineering (Hons), The Open University of Sri Lanka, 2019–2025.</p>
+        <section id="q-experience" class="q-sec" aria-label="Experience">
+          <h2>Experience</h2>
+          <ol class="q-list">
+            <li class="q-card">
+              <time>Jun 2025 – Present</time>
+              <div>
+                <h3>Software Engineer · Softvil Technologies</h3>
+                <p>Building VivoAssist (AI document search with citations), TuitionLanka (trilingual tutoring marketplace on Azure) and Exploreture (recruitment platform with a hexagonal NestJS backend, real-time messaging and JWT/OAuth).</p>
+                <ul class="q-chips"><li>Next.js</li><li>TypeScript</li><li>NestJS</li><li>MongoDB</li><li>RTK Query</li><li>Azure</li></ul>
+              </div>
+            </li>
+            <li class="q-card">
+              <time>Aug 2024 – Jun 2025</time>
+              <div>
+                <h3>Freelance Software Developer · Web development &amp; SEO</h3>
+                <p>Delivered 10+ projects for clients including Invos Global, K2 Consultants, GoDigital, Codezela Technologies, Drill Team Westnahira and Urban Vogue, handling requirements and client communication directly.</p>
+                <ul class="q-chips"><li>React</li><li>Next.js</li><li>WordPress</li><li>On-page SEO</li></ul>
+              </div>
+            </li>
+            <li class="q-card">
+              <time>Nov 2023 – Aug 2024</time>
+              <div>
+                <h3>Web Developer · Stalione Group</h3>
+                <p>Built client sites and web apps from design to launch, with SEO built into every build.</p>
+                <ul class="q-chips"><li>React</li><li>Laravel</li><li>PHP</li><li>AngularJS</li><li>Gatsby</li><li>WordPress</li></ul>
+              </div>
+            </li>
+            <li class="q-card">
+              <time>Feb 2022 – Nov 2023</time>
+              <div>
+                <h3>Associate Software Engineer · Explorelogy</h3>
+                <p class="q-was">Associate UI/UX Engineer<br>Software Engineer Intern</p>
+                <p>Shipped sites for Softmatter (MAS Holdings), Watawala Plantations, Nareta, Kefi and Wyld Global, integrated the Shopify Storefront API and Firebase, and worked on Kirana, a serverless app on AWS. Started in UI/UX with wireframes, prototypes and usability testing, and was promoted twice.</p>
+                <ul class="q-chips"><li>Gatsby</li><li>React</li><li>GraphQL</li><li>Tailwind CSS</li><li>Firebase</li><li>AWS</li></ul>
+              </div>
+            </li>
+          </ol>
+          <a class="q-more" href="/Hirantha_Rathnayaka_CV.pdf" download="Hirantha_Rathnayaka_CV.pdf">View full CV <span aria-hidden="true">↗</span></a>
+        </section>
 
-      <h2>Contact</h2>
-      <p>Email: hiranthaviraj@gmail.com<br>
-        GitHub: <a href="https://github.com/Hirantha12" rel="noopener">github.com/Hirantha12</a><br>
-        LinkedIn: <a href="https://www.linkedin.com/in/hirantha-rathnayaka" rel="noopener">linkedin.com/in/hirantha-rathnayaka</a></p>
+        <section id="q-projects" class="q-sec" aria-label="Projects">
+          <h2>Projects</h2>
+          <ol class="q-list">
+            <li class="q-card q-proj" style="--pc:#ff3d9a">
+              <span class="q-ico" aria-hidden="true">♖</span>
+              <div>
+                <h3><a href="https://exploretureweb.vercel.app/" rel="noopener" target="_blank">Exploreture <span aria-hidden="true">↗</span></a></h3>
+                <p>Recruitment platform with separate portals for job seekers, employers and admins. Hexagonal NestJS backend, real-time messaging, JWT/OAuth across every role.</p>
+                <ul class="q-chips"><li>NestJS</li><li>MongoDB</li><li>Next.js</li><li>JWT / OAuth</li></ul>
+              </div>
+            </li>
+            <li class="q-card q-proj" style="--pc:#3ef2ff">
+              <span class="q-ico" aria-hidden="true">♘</span>
+              <div>
+                <h3><a href="https://www.tuitionlanka.com/en" rel="noopener" target="_blank">TuitionLanka <span aria-hidden="true">↗</span></a></h3>
+                <p>Trilingual tutor-matching marketplace for Sri Lanka. Public site and admin dashboard, data layer on RTK Query, media pipeline on Azure Blob Storage.</p>
+                <ul class="q-chips"><li>Next.js</li><li>RTK Query</li><li>Azure Blob Storage</li></ul>
+              </div>
+            </li>
+            <li class="q-card q-proj" style="--pc:#a77bff">
+              <span class="q-ico" aria-hidden="true">♗</span>
+              <div>
+                <h3>VivoAssist <small>private platform</small></h3>
+                <p>Document-intelligence SaaS. I built the AI query dashboard (natural-language search with citation links), the authentication flow and the admin console.</p>
+                <ul class="q-chips"><li>Next.js</li><li>TypeScript</li><li>AI search</li></ul>
+              </div>
+            </li>
+            <li class="q-card q-proj" style="--pc:#a77bff">
+              <span class="q-ico" aria-hidden="true">♙</span>
+              <div>
+                <h3><a href="https://hiranthas-portfolio.vercel.app/" rel="noopener" target="_blank">Hirantha's Gambit <span aria-hidden="true">↗</span></a></h3>
+                <p>This portfolio: a 3D chess plaza with a playable chess game that unlocks a project per move, and an AI version of me that answers questions about my career.</p>
+                <ul class="q-chips"><li>Three.js</li><li>GSAP</li><li>Transformers.js</li><li>Web Audio</li><li>Vite</li></ul>
+              </div>
+            </li>
+            <li class="q-card q-proj" style="--pc:#ffb547">
+              <span class="q-ico" aria-hidden="true">♕</span>
+              <div>
+                <h3><a href="https://softmatter.io/" rel="noopener" target="_blank">Softmatter by MAS <span aria-hidden="true">↗</span></a></h3>
+                <p>Corporate site for a global smart-textiles manufacturer (MAS Holdings) with headless Shopify commerce through the Storefront API.</p>
+                <ul class="q-chips"><li>Gatsby</li><li>React</li><li>Shopify</li><li>GraphQL</li></ul>
+              </div>
+            </li>
+            <li class="q-card q-proj" style="--pc:#57ffb0">
+              <span class="q-ico" aria-hidden="true">♔</span>
+              <div>
+                <h3><a href="https://watawalatea.lk/" rel="noopener" target="_blank">Watawala Tea <span aria-hidden="true">↗</span></a></h3>
+                <p>Trilingual marketing site for a Sri Lankan tea brand, with Firebase-backed enquiry forms and on-page SEO.</p>
+                <ul class="q-chips"><li>Gatsby</li><li>Firebase</li><li>SEO</li></ul>
+              </div>
+            </li>
+            <li class="q-card q-proj" style="--pc:#3ef2ff">
+              <span class="q-ico" aria-hidden="true">♘</span>
+              <div>
+                <h3><a href="https://katakaliveinconcert.com/" rel="noopener" target="_blank">Kataka Live In Concert <span aria-hidden="true">↗</span></a></h3>
+                <p>Event site for a live concert, built so ticketing can be added later. Freelance project for Drill Team Westnahira.</p>
+                <ul class="q-chips"><li>Next.js</li><li>React</li></ul>
+              </div>
+            </li>
+            <li class="q-card q-proj" style="--pc:#ffb547">
+              <span class="q-ico" aria-hidden="true">♖</span>
+              <div>
+                <h3><a href="https://nsdconsultingservices.com/" rel="noopener" target="_blank">NSD Consulting <span aria-hidden="true">↗</span></a></h3>
+                <p>Custom WordPress site with React components for a UAE-based consulting firm, with analytics integration.</p>
+                <ul class="q-chips"><li>WordPress</li><li>React</li><li>Analytics</li></ul>
+              </div>
+            </li>
+            <li class="q-card q-proj" style="--pc:#ff3d9a">
+              <span class="q-ico" aria-hidden="true">♗</span>
+              <div>
+                <h3><a href="https://www.nftautostore.io/" rel="noopener" target="_blank">NFT Auto Store <span aria-hidden="true">↗</span></a></h3>
+                <p>E-commerce platform for trading NFTs.</p>
+                <ul class="q-chips"><li>E-commerce</li><li>Web development</li></ul>
+              </div>
+            </li>
+          </ol>
+        </section>
+
+        <section id="q-skills" class="q-sec" aria-label="Skills">
+          <h2>Skills</h2>
+          <dl class="q-skills">
+            <dt>Languages &amp; frameworks</dt><dd><ul class="q-chips"><li>JavaScript</li><li>TypeScript</li><li>PHP</li><li>React.js</li><li>Next.js</li><li>Node.js</li><li>Express.js</li><li>NestJS</li><li>Gatsby.js</li><li>AngularJS</li></ul></dd>
+            <dt>Styling &amp; UI</dt><dd><ul class="q-chips"><li>Tailwind CSS</li><li>Bootstrap</li><li>CSS3</li><li>HTML5</li></ul></dd>
+            <dt>Databases</dt><dd><ul class="q-chips"><li>PostgreSQL</li><li>MySQL</li><li>MongoDB</li><li>Firebase</li><li>DynamoDB</li></ul></dd>
+            <dt>Cloud &amp; DevOps</dt><dd><ul class="q-chips"><li>AWS</li><li>Azure</li><li>Docker</li><li>CI/CD pipelines</li></ul></dd>
+            <dt>Tools</dt><dd><ul class="q-chips"><li>Git / GitHub</li><li>Jira</li><li>Redux / RTK Query</li><li>GraphQL</li><li>WordPress</li><li>Shopify Storefront API</li></ul></dd>
+            <dt>Practices</dt><dd><ul class="q-chips"><li>Agile / Scrum</li><li>RESTful API design</li><li>Hexagonal architecture</li><li>On-page SEO</li><li>UI/UX prototyping</li><li>Code reviews</li></ul></dd>
+          </dl>
+        </section>
+
+        <section id="q-education" class="q-sec" aria-label="Education">
+          <h2>Education</h2>
+          <ol class="q-list">
+            <li class="q-card"><time>2019 – 2025</time><div><h3>Bachelor of Software Engineering (Hons)</h3><p>The Open University of Sri Lanka</p></div></li>
+            <li class="q-card"><time>2019 – 2023</time><div><h3>Higher National Diploma in Software Engineering</h3><p>The Open University of Sri Lanka</p></div></li>
+          </ol>
+        </section>
+
+        <section id="q-activity" class="q-sec" aria-label="GitHub activity">
+          <div class="q-gh-head">
+            <h2 class="q-gh-title">Days <span>|</span> Code</h2>
+            <a class="q-more" href="https://github.com/Hirantha12" rel="noopener" target="_blank">View profile <span aria-hidden="true">↗</span></a>
+          </div>
+          <p class="q-gh-sub">Last 52 weeks of contributions on GitHub, updated live.</p>
+          <div class="q-gh-scroll"><div class="q-gh" id="qGh" aria-label="GitHub contribution calendar" role="img"><p class="q-gh-msg">Loading contributions…</p></div></div>
+          <div class="q-gh-foot"><span id="qGhTotal"></span><span class="q-gh-key">Less <i class="l0"></i><i class="l1"></i><i class="l2"></i><i class="l3"></i><i class="l4"></i> More</span></div>
+        </section>
+
+        <footer class="q-foot">
+          <p>Want the full experience? <button class="q-link" id="quickClose2">Explore the 3D chess plaza</button>, play a game against me, or ask my AI avatar a question.</p>
+          <p>Built with Three.js, GSAP and Vite, deployed on Vercel. Email: hiranthaviraj@gmail.com</p>
+        </footer>
+      </div>
     </div>
   </main>
   <noscript><style>#quick{display:block!important}#start{display:none}</style></noscript>
@@ -132,7 +294,67 @@
     (function () {
       var q = document.getElementById('quick');
       document.getElementById('quickBtn').addEventListener('click', function () { q.hidden = false; q.scrollTop = 0; });
-      document.getElementById('quickClose').addEventListener('click', function () { q.hidden = true; });
+      var close = function () { q.hidden = true; };
+      document.getElementById('quickClose').addEventListener('click', close);
+      document.getElementById('quickClose2').addEventListener('click', close);
+      // section links scroll inside the panel; the section in view is highlighted
+      var links = q.querySelectorAll('.q-nav a');
+      links.forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); document.getElementById(a.dataset.q).scrollIntoView({ behavior: 'smooth', block: 'start' }); }); });
+      if ('IntersectionObserver' in window) {
+        var io = new IntersectionObserver(function (es) { es.forEach(function (en) { if (en.isIntersecting) links.forEach(function (a) { a.classList.toggle('on', a.dataset.q === en.target.id); }); }); }, { root: q, rootMargin: '-30% 0px -65% 0px' });
+        q.querySelectorAll('.q-sec').forEach(function (sec) { io.observe(sec); });
+      }
+      // GitHub contributions, loaded the first time Quick view opens. Data comes from
+      // github-contributions-api.jogruber.de (a free public reader of the GitHub profile graph).
+      var ghLoaded = false;
+      function loadGitHub() {
+        if (ghLoaded) return; ghLoaded = true;
+        var box = document.getElementById('qGh'), total = document.getElementById('qGhTotal');
+        fetch('https://github-contributions-api.jogruber.de/v4/Hirantha12?y=last')
+          .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+          .then(function (d) {
+            var days = d.contributions || [];
+            if (!days.length) throw new Error('empty');
+            var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            var first = new Date(days[0].date + 'T00:00:00'), lead = first.getDay(); // weeks start on Sunday
+            var html = '<span class="q-gh-d" style="grid-row:3">Mon</span><span class="q-gh-d" style="grid-row:5">Wed</span><span class="q-gh-d" style="grid-row:7">Fri</span>';
+            var lastMonth = -1;
+            days.forEach(function (day, i) {
+              var dt = new Date(day.date + 'T00:00:00'), col = Math.floor((i + lead) / 7) + 2, row = dt.getDay() + 2;
+              if (dt.getDate() <= 7 && dt.getMonth() !== lastMonth && row === 2) {
+                lastMonth = dt.getMonth();
+                html += '<span class="q-gh-m" style="grid-column:' + col + '">' + months[lastMonth] + '</span>';
+              }
+              var label = (day.count || 'No') + ' contribution' + (day.count === 1 ? '' : 's') + ' on ' + dt.getDate() + ' ' + months[dt.getMonth()] + ' ' + dt.getFullYear();
+              html += '<i class="l' + day.level + '" style="grid-column:' + col + ';grid-row:' + row + '" title="' + label + '"></i>';
+            });
+            box.innerHTML = html;
+            var n = (d.total && d.total.lastYear) || days.reduce(function (s, x) { return s + x.count; }, 0);
+            total.innerHTML = '<b>' + n.toLocaleString('en-US') + '</b> contributions in the last year';
+            box.setAttribute('aria-label', total.textContent);
+            var sc = box.parentNode; sc.scrollLeft = sc.scrollWidth; // phones: show the latest weeks first
+          })
+          .catch(function () {
+            box.innerHTML = '<p class="q-gh-msg">Couldn’t load the contribution graph right now. See it on <a href="https://github.com/Hirantha12" rel="noopener" target="_blank">GitHub</a>.</p>';
+          });
+      }
+      document.getElementById('quickBtn').addEventListener('click', loadGitHub);
+      if (!q.hidden) loadGitHub();
+      // theme fallback: if the 3D scene never loaded, switch the page colours directly
+      q.querySelectorAll('.q-theme [data-mood]').forEach(function (btn) { btn.addEventListener('click', function () {
+        setTimeout(function () { if (document.body.classList.contains('day') !== (btn.dataset.mood === 'day')) {
+          document.body.classList.toggle('day', btn.dataset.mood === 'day');
+          q.querySelectorAll('.q-theme [data-mood]').forEach(function (o) { o.setAttribute('aria-pressed', String(o === btn)); });
+        } }, 0);
+      }); });
+      // a soft light that follows the mouse (devices with a mouse only)
+      if (window.matchMedia && matchMedia('(hover: hover) and (pointer: fine)').matches) {
+        var raf = 0, mx = 0, my = 0;
+        q.addEventListener('mousemove', function (e) { mx = e.clientX; my = e.clientY; if (!raf) raf = requestAnimationFrame(function () { raf = 0; q.style.setProperty('--mx', mx + 'px'); q.style.setProperty('--my', my + 'px'); q.classList.add('lit'); }); });
+        q.addEventListener('mouseleave', function () { q.classList.remove('lit'); });
+      }
+      // local time in Colombo
+      try { document.getElementById('qTime').textContent = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Colombo' }) + ' local time'; } catch (e) {}
     })();
   </script>
 </body>
