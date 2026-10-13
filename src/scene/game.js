@@ -101,21 +101,39 @@ export function createGame({ scene, camera, board, boardTop, sqPos, ivory, ebony
   const markMat = new THREE.MeshBasicMaterial({ color: 0x57ffb0, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false });
   const fromMark = new THREE.Mesh(new THREE.PlaneGeometry(0.48, 0.48), markMat);
   fromMark.rotation.x = -Math.PI / 2; fromMark.position.y = 0.006; fromMark.visible = false; board.add(fromMark);
-  function showArrow(from, to, color) {
-    hideArrow();
-    const a = at(from), b = at(to), dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
-    const s = new THREE.Shape(), w = 0.045, hw = 0.13, hl = 0.2, start = 0.14, end = len - 0.04;
+  // An arrow shape; `g` grows it on every side (used for the white outline by day).
+  function arrowGeo(len, g) {
+    const s = new THREE.Shape(), w = 0.045 + g, hw = 0.13 + g * 1.6, hl = 0.2 + g * 1.2, start = 0.14 - g, end = len - 0.04 + g * 1.4;
     s.moveTo(-w, start); s.lineTo(w, start); s.lineTo(w, end - hl); s.lineTo(hw, end - hl); s.lineTo(0, end);
     s.lineTo(-hw, end - hl); s.lineTo(-w, end - hl); s.closePath();
     const geo = new THREE.ShapeGeometry(s); geo.rotateX(-Math.PI / 2); // shape +y now points to -z
-    arrow = new THREE.Mesh(geo, arrowMat);
+    return geo;
+  }
+  const outlineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, depthWrite: false });
+  function showArrow(from, to, color) {
+    hideArrow();
+    const a = at(from), b = at(to), dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
+    arrow = new THREE.Mesh(arrowGeo(len, 0), arrowMat);
     arrow.position.set(a.x, 0.012, a.z); arrow.rotation.y = Math.atan2(-dx, -dz);
-    arrowMat.color.set(color); markMat.color.set(color);
+    // by day a white outline under it, so it stands out on the wooden squares
+    const outline = new THREE.Mesh(arrowGeo(len, 0.028), outlineMat); outline.position.y = -0.002; outline.renderOrder = -1;
+    outline.visible = dayMode; arrow.add(outline); arrow.userData.outline = outline;
+    arrowColor = color; paintArrow();
     board.add(arrow);
     fromMark.position.x = a.x; fromMark.position.z = a.z; fromMark.visible = true;
   }
+  // By day the light wooden board needs a deeper colour (and no additive glow) to stand out.
+  let arrowColor = '#57ffb0', dayMode = false;
+  // By day every arrow is the site's pink (some project colours, like amber, vanish on walnut).
+  const DAY_ARROW = '#e0206e';
+  function paintArrow() {
+    const c = dayMode ? DAY_ARROW : arrowColor;
+    arrowMat.color.set(c); markMat.color.set(c);
+    if (arrow) arrow.userData.outline.visible = dayMode;
+    markMat.blending = dayMode ? THREE.NormalBlending : THREE.AdditiveBlending; markMat.opacity = dayMode ? 0.4 : 0.35;
+  }
   function hideArrow() {
-    if (arrow) { board.remove(arrow); arrow.geometry.dispose(); arrow = null; }
+    if (arrow) { board.remove(arrow); arrow.geometry.dispose(); arrow.userData.outline.geometry.dispose(); arrow = null; }
     fromMark.visible = false;
   }
 
@@ -328,20 +346,34 @@ export function createGame({ scene, camera, board, boardTop, sqPos, ivory, ebony
   function tap(hits) {
     if (!hits.length) return;
     const data = hits[0].object.userData;
-    if (data.kind === 'gclock') {
-      if (state === 'start') { state = 'starting'; handPress(() => { press('b'); whiteTurn(); }); } // tapped before the demo
-      else if (state === 'press') {
-        state = 'pressing'; // ignore extra taps while the hand presses
-        handPress(() => { press('b'); onChange({ phase: 'project', k }); k++; later(whiteTurn, 900); });
-      }
-      return;
-    }
+    if (data.kind === 'gclock') { pressClock(); return; }
     if (state !== 'move') return;
     const [from, to] = G.moves[k].black;
     const squares = hits.map((h) => squareOf(h.object.userData, h.point));
     if (squares.includes(to) && (selected || !squares.includes(from))) blackMove();
     else if (squares.includes(from)) select(pieces.get(from));
     else nudge();
+  }
+
+  // The visitor's clock: tapped in 3D or with the "Press" button in the panel.
+  function pressClock() {
+    if (state === 'start') { state = 'starting'; handPress(() => { press('b'); whiteTurn(); }); } // tapped before the demo
+    else if (state === 'press') {
+      state = 'pressing'; // ignore extra taps while the hand presses
+      handPress(() => { press('b'); onChange({ phase: 'project', k }); k++; later(whiteTurn, 900); });
+    }
+  }
+  // The "Move" button in the panel plays the visitor's move for them: the piece lifts, then moves.
+  function autoMove() {
+    if (state !== 'move') return;
+    const p = pieces.get(G.moves[k].black[0]);
+    state = 'auto';
+    if (selected !== p) select(p);
+    later(() => { if (state === 'auto') blackMove(); }, 320);
+  }
+  function action(a) {
+    if (a === 'g-move') autoMove();
+    else if (a === 'g-press') pressClock();
   }
 
   let pulse = 0;
@@ -357,14 +389,22 @@ export function createGame({ scene, camera, board, boardTop, sqPos, ivory, ebony
     blackBtn.material.emissiveIntensity = yourPress ? glow : 0;
     pointer.visible = yourPress;
     if (yourPress) pointer.position.y = 0.6 + Math.abs(Math.sin(pulse * 4)) * 0.12;
-    if (arrow) arrowMat.opacity = 0.6 + 0.3 * Math.sin(pulse * 4);
+    if (arrow) arrowMat.opacity = dayMode ? 0.88 + 0.12 * Math.sin(pulse * 4) : 0.6 + 0.3 * Math.sin(pulse * 4);
     if (vHand.visible) placeVisitorHand();
   }
 
   const pickList = () => all.filter((p) => p.g.visible).map((p) => p.mesh).concat(boardTop, clockMeshes);
 
   return {
-    enter, exit, tap, update, pickList, layout, shake,
+    enter, exit, tap, update, pickList, layout, shake, action,
+    // Sunny mood: the visitor's mint "hologram" hand and the clock pointer vanish against the
+    // grass, so by day they turn solid pink instead.
+    setDay(day) {
+      holo.color.set(day ? 0xff3d8b : 0x57ffb0); holo.opacity = day ? 0.9 : 0.55;
+      holo.blending = day ? THREE.NormalBlending : THREE.AdditiveBlending;
+      pointer.material.color.set(day ? 0xff3d8b : 0x57ffb0);
+      dayMode = day; paintArrow();
+    },
     // The avatar arrives with a lazy import(); if a game is already running he sits down at once.
     // Outside a game he sits in the kiosk coding.
     setAvatar(a) { avatar = a; if (state !== 'off') { a.show(); if (state === 'move') a.watchVisitor(); } else a.sitDown(); },

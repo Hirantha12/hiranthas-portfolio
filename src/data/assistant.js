@@ -67,6 +67,8 @@ export const QA = [
     q: ['how can I contact you', 'what is your email', 'are you available for hire', 'can I see your LinkedIn', 'what is your GitHub', 'how do I get in touch'], keys: ['contact', 'email', 'reach', 'hire', 'linkedin', 'github'] },
   { id: 'site', a: 'I built this portfolio with Three.js for the 3D scene and GSAP for the animations, bundled with Vite and deployed on Vercel. Everything, even me, is made in code, and this chat uses a small AI model that runs in your browser.',
     q: ['how did you build this website', 'what is this portfolio made with', 'how was this 3D site made'], keys: ['website', 'threejs', 'gsap', 'vite'] },
+  { id: 'cv', a: 'Sure! You can download my CV (PDF) with the Download CV button in the About me or Contact panel, or click "CV" on the scoresheet tag on the board to take a copy of my scoresheet.',
+    q: ['can I get your CV', 'where is your resume', 'can I download your CV', 'do you have a resume', 'send me your CV'], keys: ['cv', 'resume', 'résumé', 'download'] },
   { id: 'private', a: `I keep personal details like that off the website. Please email me at ${PROFILE.email} and I'll be happy to share what you need.`,
     q: ['what is your phone number', 'can I have your mobile number', 'what is your home address', 'how old are you', 'when is your birthday', 'what is your NIC number', 'what are your salary expectations', 'can you give me references', 'what is your whatsapp'], keys: ['phone', 'mobile', 'whatsapp', 'address', 'nic', 'birthday', 'age', 'salary', 'reference', 'references'] },
   // one entry per project, written from the project data

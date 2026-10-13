@@ -6,8 +6,22 @@ import { previewHTML, mountPreviews, previewClick, parkPreviews, preconnect, war
 const host = (u) => u.replace(/^https?:\/\//, '').replace(/\/$/, '');
 const isDesktop = () => innerWidth > 860;
 
+// Initials shown until the photo loads (or if it's missing).
+const initials = PROFILE.name.split(' ').map((w) => w[0]).join('').slice(0, 2);
+
 function aboutHTML() {
   return `
+  <div class="pcard">
+    <div class="pc-photo"><span aria-hidden="true">${initials}</span>
+      <img src="${PROFILE.photo}" alt="${PROFILE.name}" width="112" height="112" decoding="async" onerror="this.remove()"></div>
+    <div class="pc-info">
+      <span class="pc-tag">♔ White · Board e1</span>
+      <b>${PROFILE.role}</b>
+      <em>${PROFILE.now}</em>
+      <span class="pc-meta">${PROFILE.location.split(' · ')[0]}</span>
+      <a class="cv-btn" href="${PROFILE.cv}" download="Hirantha_Rathnayaka_CV.pdf"><i aria-hidden="true">⬇</i><span><b>Download CV</b><small>PDF · a copy of my scoresheet</small></span></a>
+    </div>
+  </div>
   <p class="lead">I build production web apps end to end: React and Next.js front ends, Node.js, Express and NestJS services, SQL and NoSQL data, deployed on AWS and Azure.</p>
   <div class="stats">
     <div><b>4+</b><span>years shipping production web apps</span></div>
@@ -35,6 +49,7 @@ function experienceHTML() {
     <span class="pc-k">♞ Knight's tour</span>
     <b>Jump through my career</b>
     <em>I'll show you how a knight moves, then jump across the plaza: six moves, six roles. Or just read the scoresheet below.</em>
+    <span class="pc-go">Start the tour <i aria-hidden="true">▶</i></span>
   </button>
   <p class="lead">My career as a scoresheet: six moves from intern to full stack engineer.</p>
   <ol class="moves">${MOVES.map((m) => `
@@ -59,6 +74,7 @@ function contactHTML() {
   <div class="crow"><span class="k">Email</span><span class="v" id="emailVal">${PROFILE.email}</span><button class="btn-sm" data-copy>Copy</button></div>
   <div class="crow"><span class="k">GitHub</span><a href="${PROFILE.github}" target="_blank" rel="noopener">${host(PROFILE.github)} ↗</a><span></span></div>
   <div class="crow"><span class="k">LinkedIn</span><a href="${PROFILE.linkedin}" target="_blank" rel="noopener">in/hirantha-rathnayaka ↗</a><span></span></div>
+  <div class="crow"><span class="k">CV</span><a href="${PROFILE.cv}" download="Hirantha_Rathnayaka_CV.pdf">PDF · 2 pages</a><a class="btn-sm" href="${PROFILE.cv}" download="Hirantha_Rathnayaka_CV.pdf">⬇ Download</a></div>
   <div class="crow"><span class="k">Based in</span><span class="v" style="user-select:text">${PROFILE.location}</span><span></span></div>`;
 }
 
@@ -68,6 +84,7 @@ function projectsListHTML() {
     <span class="pc-k">♚ Play for them</span>
     <b>Beat me in ${PROJECTS.length} moves</b>
     <em>Sit at the board as Black. Every move you make unlocks a project, and move ${PROJECTS.length} is checkmate. A different opening trap every game.</em>
+    <span class="pc-go">Play now <i aria-hidden="true">▶</i></span>
   </button>
   <p class="lead">My projects, set up on the board: eight on the first rank, and this portfolio as the e2 pawn. Pick a piece or a project below.</p>
   <ol class="plist">${PROJECTS.map((p, i) => `
@@ -114,8 +131,8 @@ function gameStatus(info) {
   switch (info.phase) {
     case 'start': return `<span class="gk">Opening: ${info.name}</span> ${info.idea} <span class="gcall">You play Black. Starting the clock…</span>`;
     case 'thinking': return `<span class="gk">Move ${info.k + 1} / ${n}</span> Hirantha is thinking…`;
-    case 'move': return `<span class="gk">Move ${info.k + 1} / ${n}</span> ${info.say} <span class="gcall">Play ${info.san}: tap the piece, then its square</span>`;
-    case 'press': return `<span class="gk">Move ${info.k + 1} / ${n}</span> <span class="gcall pulse">⏱ Press your clock</span> to unlock project ${info.k + 1}.`;
+    case 'move': return `<span class="gk">Move ${info.k + 1} / ${n}</span> ${info.say} <span class="gcall">Play ${info.san}: tap the piece, then its square</span> or <button class="btn-sm gbtn" data-game="g-move">Move ▶</button>`;
+    case 'press': return `<span class="gk">Move ${info.k + 1} / ${n}</span> <span class="gcall pulse">⏱ Press your clock</span> or <button class="btn-sm gbtn" data-game="g-press">Press ▶</button> to unlock project ${info.k + 1}.`;
     case 'mate': return `<b>Checkmate!</b> You beat Hirantha in ${n} moves with the ${info.name}.`;
     case 'handshake': return `<b>Checkmate!</b> Hirantha offers you his hand. <button class="btn shake" data-game="shake">🤝 Shake hands</button>`;
     case 'gg': return `<b>Good game!</b> Thanks for playing, and for reading through my projects.`;

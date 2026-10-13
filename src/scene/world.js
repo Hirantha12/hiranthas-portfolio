@@ -10,10 +10,15 @@ const V3 = THREE.Vector3;
 // P(): point/spot lights with decay 0 (only the soft cutoff at `distance`), scaled to match.
 const I = (v) => v * Math.PI;
 export const P = (v) => v * Math.PI * 0.28;
+// A deeper version of a neon colour, readable as text against a bright sky.
+export function deep(hex, k = 0.48) {
+  const c = new THREE.Color(hex); const hsl = {}; c.getHSL(hsl);
+  return '#' + c.setHSL(hsl.h, Math.min(1, hsl.s * 1.05), hsl.l * k).getHexString();
+}
 
 export function buildWorld(scene, { touch, reduce }) {
   /* ---------- lights ---------- */
-  scene.add(new THREE.HemisphereLight(0x5a4a9a, 0x120a1c, I(0.55)));
+  const hemi = new THREE.HemisphereLight(0x5a4a9a, 0x120a1c, I(0.55)); scene.add(hemi);
   const moon = new THREE.DirectionalLight(0x7f78ff, I(0.55)); moon.position.set(-8, 14, -12); scene.add(moon);
   const fill = new THREE.DirectionalLight(0x5f5596, I(0.4)); fill.position.set(0, 6, 14); scene.add(fill);
   const flash = new THREE.DirectionalLight(0xd6deff, 0); flash.position.set(6, 20, 12); scene.add(flash);
@@ -25,8 +30,15 @@ export function buildWorld(scene, { touch, reduce }) {
   kingSpot.position.set(0, 14, -1.5); kingSpot.target.position.set(0, 3, -9.6); scene.add(kingSpot, kingSpot.target);
   const warm = new THREE.PointLight(0xffa860, P(0.9), 7, 0); warm.position.set(0, 3, -4.6); scene.add(warm);
   const signLight = new THREE.PointLight(0xff3d9a, 0, 11, 0); signLight.position.set(0, 4.5, -1.6); scene.add(signLight);
+  // The sun of the sunny-day mood. It is always in the scene (dark at night), so switching moods
+  // never recompiles the shaders. Its shadow map is only redrawn in daylight (see mood.js).
+  const sun = new THREE.DirectionalLight(0xfff0d6, 0); sun.position.set(-15, 24, 12);
+  sun.castShadow = !touch; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
+  Object.assign(sun.shadow.camera, { left: -24, right: 24, top: 24, bottom: -24, near: 1, far: 80 });
+  sun.shadow.autoUpdate = false; sun.shadow.needsUpdate = true; scene.add(sun); // drawn once now, so night has a valid (unused) map
 
   /* ---------- plaza floor: a giant faint chessboard, wet ---------- */
+  const floorDay = { uDayMap: { value: null }, uDay: { value: 0 }, uGrass: { value: new THREE.Color(0x7cad4c) } };
   {
     const [c, x] = cnv(512, 512), S = 64;
     for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) { x.fillStyle = (r + f) % 2 ? '#120d1c' : '#1c152b'; x.fillRect(f * S, r * S, S, S); }
@@ -40,12 +52,35 @@ export function buildWorld(scene, { touch, reduce }) {
       g.addColorStop(0, 'rgba(25,25,25,.95)'); g.addColorStop(1, 'rgba(25,25,25,0)');
       rx.fillStyle = g; rx.fillRect(X - R, Y - R, R * 2, R * 2);
     }
+    // Day: a lawn chessboard, light and dark mown grass, same squares as the night floor (the
+    // Knight's tour uses them). Further out it fades into plain meadow.
+    const [dc, dx] = cnv(512, 512);
+    for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) { dx.fillStyle = (r + f) % 2 ? '#6c9f42' : '#8fbd5c'; dx.fillRect(f * S, r * S, S, S); }
+    for (let i = 0; i < 2600; i++) { // blades and clover: a little texture in the grass
+      dx.fillStyle = Math.random() < 0.5 ? 'rgba(40,90,20,.10)' : 'rgba(230,255,170,.10)';
+      dx.fillRect(Math.random() * 512, Math.random() * 512, 1 + Math.random() * 2, 2 + Math.random() * 5);
+    }
+    dx.strokeStyle = 'rgba(60,110,35,.35)'; dx.lineWidth = 2;
+    for (let i = 0; i <= 8; i++) { dx.beginPath(); dx.moveTo(i * S, 0); dx.lineTo(i * S, 512); dx.stroke(); dx.beginPath(); dx.moveTo(0, i * S); dx.lineTo(512, i * S); dx.stroke(); }
+    floorDay.uDayMap.value = tex(dc, 9);
     const mat = new THREE.MeshStandardMaterial({ map: tex(c, 9), roughnessMap: tex(rc, 4.5), roughness: 1, metalness: 0.35 });
+    mat.onBeforeCompile = (sh) => {
+      Object.assign(sh.uniforms, floorDay);
+      sh.vertexShader = sh.vertexShader.replace('void main() {', 'varying vec3 vWPos;\nvoid main() {')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      sh.fragmentShader = sh.fragmentShader.replace('void main() {', 'uniform sampler2D uDayMap;\nuniform float uDay;\nuniform vec3 uGrass;\nvarying vec3 vWPos;\nvoid main() {')
+        .replace('#include <map_fragment>', `#include <map_fragment>
+  vec3 lawn = mix(texture2D(uDayMap, vMapUv).rgb, uGrass, smoothstep(17.0, 34.0, length(vWPos.xz)));
+  diffuseColor.rgb = mix(diffuseColor.rgb, lawn, uDay);`)
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = mix(roughnessFactor, 1.0, uDay);')
+        .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n  metalnessFactor = mix(metalnessFactor, 0.0, uDay);');
+    };
     const m = new THREE.Mesh(new THREE.CircleGeometry(70, 96), mat);
     m.rotation.x = -Math.PI / 2; m.receiveShadow = true; scene.add(m);
   }
 
   /* ---------- distant city ring (gives depth when you orbit 360°) ---------- */
+  let cityMesh;
   {
     const [c, x] = cnv(128, 256); x.fillStyle = '#0d0a16'; x.fillRect(0, 0, 128, 256);
     for (let r = 0; r < 24; r++) for (let k = 0; k < 8; k++) {
@@ -55,7 +90,7 @@ export function buildWorld(scene, { touch, reduce }) {
       }
     }
     x.globalAlpha = 1;
-    const mat = new THREE.MeshBasicMaterial({ map: tex(c), color: 0x8a7cc0 });
+    const mat = new THREE.MeshBasicMaterial({ map: tex(c), color: 0x8a7cc0, transparent: true });
     // One instanced mesh draws all 28 buildings in a single call. A unit box scaled per building
     // has the same UVs as a box built at that size, so the window texture looks the same.
     const city = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mat, 28);
@@ -67,6 +102,7 @@ export function buildWorld(scene, { touch, reduce }) {
       city.setMatrixAt(i, m4.compose(new V3(Math.cos(a) * R, h / 2, -Math.sin(a) * R), q, new V3(w, h, w)));
     }
     city.computeBoundingSphere(); scene.add(city);
+    cityMesh = city;
   }
 
   /* ---------- label sprites over the giant pieces ---------- */
@@ -74,12 +110,20 @@ export function buildWorld(scene, { touch, reduce }) {
     const [c, x] = cnv(640, 200); x.textAlign = 'center'; x.textBaseline = 'middle';
     fitFont(x, text, 700, '"Chakra Petch", sans-serif', 80, 600); neon(x, text, 320, 84, color, 26);
     x.font = '500 27px "JetBrains Mono", monospace'; x.fillStyle = 'rgba(236,228,255,.85)'; x.fillText(sub, 320, 160);
+    // Daylight version: neon would vanish against a bright sky, so dark text with a white halo.
+    const [dc, dx] = cnv(640, 200); dx.textAlign = 'center'; dx.textBaseline = 'middle'; dx.lineJoin = 'round';
+    fitFont(dx, text, 700, '"Chakra Petch", sans-serif', 80, 600);
+    dx.lineWidth = 12; dx.strokeStyle = 'rgba(255,255,255,.8)'; dx.shadowColor = 'rgba(255,255,255,.6)'; dx.shadowBlur = 10; dx.strokeText(text, 320, 84); dx.shadowBlur = 0;
+    dx.fillStyle = deep(color); dx.fillText(text, 320, 84);
+    dx.font = '600 27px "JetBrains Mono", monospace'; dx.lineWidth = 8; dx.strokeText(sub, 320, 160); dx.fillStyle = '#26303a'; dx.fillText(sub, 320, 160);
     const m = new THREE.SpriteMaterial({ map: tex(c), transparent: true, depthWrite: false, opacity: 0 });
-    const s = new THREE.Sprite(m); s.scale.set(width, (width * 200) / 640, 1); return s;
+    const s = new THREE.Sprite(m); s.scale.set(width, (width * 200) / 640, 1);
+    s.userData.tex = { night: m.map, day: tex(dc) };
+    return s;
   }
 
   /* ---------- giant section pieces ---------- */
-  const giants = {}, giantMeshes = [];
+  const giants = {}, giantMeshes = [], glowLights = [];
   Object.entries(SECTIONS).forEach(([key, s], i) => {
     const col = new THREE.Color(s.color);
     const mat = new THREE.MeshStandardMaterial(s.ivory ? { color: 0xcfc6b4, roughness: 0.35, metalness: 0.08 } : { color: 0x1d1629, roughness: 0.22, metalness: 0.4 });
@@ -93,7 +137,7 @@ export function buildWorld(scene, { touch, reduce }) {
     const disk = new THREE.Mesh(new THREE.CircleGeometry(R, 48), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.07, depthWrite: false }));
     disk.rotation.x = -Math.PI / 2; disk.position.y = 0.02; holder.add(disk);
     const L = key === 'about' ? new THREE.PointLight(col, P(1.5), 11, 0) : new THREE.PointLight(col, P(1.2), 8, 0);
-    L.position.set(0, key === 'about' ? 3.2 : 1.3, key === 'about' ? 3.2 : 2); holder.add(L);
+    L.position.set(0, key === 'about' ? 3.2 : 1.3, key === 'about' ? 3.2 : 2); holder.add(L); glowLights.push(L);
     const H = HEIGHT[s.piece] * s.scale;
     const lw = key === 'about' ? 4.6 : 3.3;
     const label = labelSprite(s.label, `${GLYPH[s.piece]} ${PIECE_NAME[s.piece].toUpperCase()} · ${s.sq}`, s.color, lw);
@@ -101,7 +145,7 @@ export function buildWorld(scene, { touch, reduce }) {
     // don't run into Projects and Contact.
     label.position.y = H + (key === 'about' ? 1.2 : key === 'experience' || key === 'skills' ? 1.75 : 0.85); holder.add(label);
     // The floating name is clickable too: people try the big glowing words first.
-    label.userData = { kind: 'section', key }; giantMeshes.push(label);
+    label.userData = { kind: 'section', key, tex: label.userData.tex }; giantMeshes.push(label);
     piece.position.y = 18; // waits in the sky for the intro drop
     giants[key] = { key, s, holder, piece, mat, ring, disk, label, lw, ly: label.position.y, phase: i * 1.3, H, baseEI: mat.emissiveIntensity };
   });
@@ -118,7 +162,8 @@ export function buildWorld(scene, { touch, reduce }) {
   box(7.4, 3.6, 0.25, wall, 0, 2.1, -6.2);
   box(0.25, 3.6, 3.4, wall, -3.6, 2.1, -4.5);
   box(0.25, 3.6, 3.4, wall, 3.6, 2.1, -4.5);
-  box(8.2, 0.2, 4.4, new THREE.MeshStandardMaterial({ color: 0x1b1328, roughness: 0.5 }), 0, 4.0, -4.3).rotation.x = 0.12;
+  const roof = new THREE.MeshStandardMaterial({ color: 0x1b1328, roughness: 0.5 });
+  box(8.2, 0.2, 4.4, roof, 0, 4.0, -4.3).rotation.x = 0.12;
   {
     const [c, x] = cnv(512, 64);
     for (let i = 0; i < 16; i++) { x.fillStyle = i % 2 ? '#2a1840' : '#ff3d9a'; x.fillRect(i * 32, 0, 32, 64); }
@@ -248,37 +293,53 @@ export function buildWorld(scene, { touch, reduce }) {
     bulbs.computeBoundingSphere(); scene.add(bulbs);
   }
   // street lamps
+  const lamps = [];
   [[-13, 1.5], [13, 1.5]].forEach(([x, z]) => {
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 5, 10), new THREE.MeshStandardMaterial({ color: 0x1b1626, metalness: 0.5, roughness: 0.4 }));
     pole.position.set(x, 2.5, z); scene.add(pole);
     const globe = new THREE.Mesh(new THREE.SphereGeometry(0.38, 20, 16), new THREE.MeshBasicMaterial({ color: 0xffe2f2 }));
     globe.position.set(x, 5.1, z); scene.add(globe);
     const L = new THREE.PointLight(0xff8ad0, P(1.2), 9, 0); L.position.set(x, 4.6, z); scene.add(L);
+    lamps.push({ globe, light: L });
   });
 
   /* ---------- table + playable board ---------- */
   const ped = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.9, 0.78, 24), darkWood); ped.position.set(0, 0.39, 0.2); ped.castShadow = true; scene.add(ped);
   box(5, 0.14, 5, wood, 0, 0.85, 0.2);
-  box(4.5, 0.18, 4.5, new THREE.MeshStandardMaterial({ color: 0x16101f, roughness: 0.4 }), 0, 1.01, 0.2);
+  const boardFrame = new THREE.MeshStandardMaterial({ color: 0x16101f, roughness: 0.4 });
+  box(4.5, 0.18, 4.5, boardFrame, 0, 1.01, 0.2);
   [[-3.1, 1.6], [3.1, -1.0]].forEach(([x, z]) => {
     box(0.12, 0.7, 0.12, darkWood, x, 0.35, z);
     const s = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.1, 20), wood); s.position.set(x, 0.75, z); s.castShadow = true; scene.add(s);
   });
 
   const board = new THREE.Group(); board.position.set(0, 1.1, 0.2); scene.add(board);
+  const boardTex = {};
   let boardTop; // the playing surface, used to find which square was tapped in the game
   {
-    const N = 1024, B = (N * 0.2) / 4.4, S = (N - 2 * B) / 8; const [c, x] = cnv(N, N);
-    x.fillStyle = '#16101f'; x.fillRect(0, 0, N, N);
-    for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) { x.fillStyle = (r + f) % 2 ? '#3b2b52' : '#b8aa90'; x.fillRect(B + f * S, B + r * S, S + 0.6, S + 0.6); }
-    x.strokeStyle = 'rgba(255,61,154,.7)'; x.lineWidth = 3; x.strokeRect(B - 7, B - 7, N - 2 * B + 14, N - 2 * B + 14);
-    x.fillStyle = '#b9a8d8'; x.font = '600 24px "JetBrains Mono", monospace'; x.textAlign = 'center'; x.textBaseline = 'middle';
-    for (let i = 0; i < 8; i++) {
-      const fl = 'abcdefgh'[i];
-      x.fillText(fl, B + i * S + S / 2, N - B / 2); x.fillText(fl, B + i * S + S / 2, B / 2);
-      x.fillText(String(8 - i), B / 2, B + i * S + S / 2); x.fillText(String(8 - i), N - B / 2, B + i * S + S / 2);
-    }
-    const p = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 4.4), new THREE.MeshStandardMaterial({ map: tex(c), roughness: 0.85, metalness: 0 }));
+    // Night: purple and ivory with a neon edge. Day: a warm wooden board (maple and walnut).
+    const drawBoard = (day) => {
+      const N = 1024, B = (N * 0.2) / 4.4, S = (N - 2 * B) / 8; const [c, x] = cnv(N, N);
+      x.fillStyle = day ? '#5b3a22' : '#16101f'; x.fillRect(0, 0, N, N);
+      for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) {
+        x.fillStyle = (r + f) % 2 ? (day ? '#9a6638' : '#3b2b52') : (day ? '#ead2a4' : '#b8aa90');
+        x.fillRect(B + f * S, B + r * S, S + 0.6, S + 0.6);
+        if (day) for (let g = 0; g < 7; g++) { // a little wood grain
+          x.fillStyle = `rgba(80,45,15,${0.04 + Math.random() * 0.05})`;
+          x.fillRect(B + f * S, B + r * S + Math.random() * S, S, 1 + Math.random() * 2);
+        }
+      }
+      x.strokeStyle = day ? 'rgba(232,184,92,.9)' : 'rgba(255,61,154,.7)'; x.lineWidth = day ? 4 : 3; x.strokeRect(B - 7, B - 7, N - 2 * B + 14, N - 2 * B + 14);
+      x.fillStyle = day ? '#f1dfb8' : '#b9a8d8'; x.font = '600 24px "JetBrains Mono", monospace'; x.textAlign = 'center'; x.textBaseline = 'middle';
+      for (let i = 0; i < 8; i++) {
+        const fl = 'abcdefgh'[i];
+        x.fillText(fl, B + i * S + S / 2, N - B / 2); x.fillText(fl, B + i * S + S / 2, B / 2);
+        x.fillText(String(8 - i), B / 2, B + i * S + S / 2); x.fillText(String(8 - i), N - B / 2, B + i * S + S / 2);
+      }
+      return tex(c);
+    };
+    boardTex.night = drawBoard(false); boardTex.day = drawBoard(true);
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 4.4), new THREE.MeshStandardMaterial({ map: boardTex.night, roughness: 0.85, metalness: 0 }));
     p.rotation.x = -Math.PI / 2; p.position.y = 0.002; p.receiveShadow = true; board.add(p);
     p.userData = { kind: 'gboard' }; boardTop = p;
   }
@@ -371,7 +432,7 @@ export function buildWorld(scene, { touch, reduce }) {
     pencil.rotation.z = Math.PI / 2; pencil.rotation.y = 0.4; pencil.position.set(1.9, 0.05, 1.4); g.add(pencil);
     const L = new THREE.PointLight(0xffe6c8, P(0.6), 6, 0); L.position.set(0, 3, 2.2); g.add(L);
     [cb, clip, paper].forEach((m) => { m.userData = { kind: 'sheet' }; sheetMeshes.push(m); });
-    return { g, tilt };
+    return { g, tilt, paperMat, light: L };
   })();
 
   /* ---------- rain + ripples ---------- */
@@ -447,5 +508,7 @@ vec3 transformed = vec3((h.x - 0.5) * 46.0 + position.y * ${WIND.toFixed(2)}, yy
     rippleMesh.instanceMatrix.needsUpdate = true; rippleAlpha.needsUpdate = true;
   }
 
-  return { giants, giantMeshes, board, boardTop, ivoryS, ebonyS, stringLights, sqPos, decor, projPieces, projMeshes, hl, sheet, sheetMeshes, signMat, signLight, flash, drawCode, updateRain, PIECE_SCALE: 0.62 };
+  // Everything the mood switch (night / sunny day) adjusts. See mood.js.
+  const moodRefs = { hemi, moon, fill, sun, boardSpot, kingSpot, warm, signLight, glowLights, lamps, city: cityMesh, wall, roof, wood, darkWood, floorDay, boardTex, boardFrame, ebonyS, ivoryS, getBoardTop: () => boardTop, rain, rainMat, rippleMesh, rippleMat, sheet };
+  return { giants, giantMeshes, board, boardTop, ivoryS, ebonyS, stringLights, sqPos, decor, projPieces, projMeshes, hl, sheet, sheetMeshes, signMat, signLight, flash, drawCode, updateRain, moodRefs, PIECE_SCALE: 0.62 };
 }
