@@ -19,6 +19,7 @@ function aboutHTML() {
       <b>${PROFILE.role}</b>
       <em>${PROFILE.now}</em>
       <span class="pc-meta">${PROFILE.location.split(' · ')[0]}</span>
+      <a class="cv-btn" href="${PROFILE.cv}" download="Hirantha_Rathnayaka_CV.pdf"><i aria-hidden="true">⬇</i><span><b>Download CV</b><small>PDF · a copy of my scoresheet</small></span></a>
     </div>
   </div>
   <p class="lead">I build production web apps end to end: React and Next.js front ends, Node.js, Express and NestJS services, SQL and NoSQL data, deployed on AWS and Azure.</p>
@@ -73,6 +74,7 @@ function contactHTML() {
   <div class="crow"><span class="k">Email</span><span class="v" id="emailVal">${PROFILE.email}</span><button class="btn-sm" data-copy>Copy</button></div>
   <div class="crow"><span class="k">GitHub</span><a href="${PROFILE.github}" target="_blank" rel="noopener">${host(PROFILE.github)} ↗</a><span></span></div>
   <div class="crow"><span class="k">LinkedIn</span><a href="${PROFILE.linkedin}" target="_blank" rel="noopener">in/hirantha-rathnayaka ↗</a><span></span></div>
+  <div class="crow"><span class="k">CV</span><a href="${PROFILE.cv}" download="Hirantha_Rathnayaka_CV.pdf">PDF · 2 pages</a><a class="btn-sm" href="${PROFILE.cv}" download="Hirantha_Rathnayaka_CV.pdf">⬇ Download</a></div>
   <div class="crow"><span class="k">Based in</span><span class="v" style="user-select:text">${PROFILE.location}</span><span></span></div>`;
 }
 
