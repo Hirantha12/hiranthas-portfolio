@@ -9,7 +9,6 @@ import { makePiece } from './pieces.js';
 import { PROJECTS } from '../data/content.js';
 import { pickGame } from '../data/games.js';
 import { Snd } from '../audio/sound.js';
-import { deep } from './world.js';
 
 const BACK = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook'];
 const FILES = 'abcdefgh';
@@ -102,28 +101,39 @@ export function createGame({ scene, camera, board, boardTop, sqPos, ivory, ebony
   const markMat = new THREE.MeshBasicMaterial({ color: 0x57ffb0, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false });
   const fromMark = new THREE.Mesh(new THREE.PlaneGeometry(0.48, 0.48), markMat);
   fromMark.rotation.x = -Math.PI / 2; fromMark.position.y = 0.006; fromMark.visible = false; board.add(fromMark);
-  function showArrow(from, to, color) {
-    hideArrow();
-    const a = at(from), b = at(to), dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
-    const s = new THREE.Shape(), w = 0.045, hw = 0.13, hl = 0.2, start = 0.14, end = len - 0.04;
+  // An arrow shape; `g` grows it on every side (used for the white outline by day).
+  function arrowGeo(len, g) {
+    const s = new THREE.Shape(), w = 0.045 + g, hw = 0.13 + g * 1.6, hl = 0.2 + g * 1.2, start = 0.14 - g, end = len - 0.04 + g * 1.4;
     s.moveTo(-w, start); s.lineTo(w, start); s.lineTo(w, end - hl); s.lineTo(hw, end - hl); s.lineTo(0, end);
     s.lineTo(-hw, end - hl); s.lineTo(-w, end - hl); s.closePath();
     const geo = new THREE.ShapeGeometry(s); geo.rotateX(-Math.PI / 2); // shape +y now points to -z
-    arrow = new THREE.Mesh(geo, arrowMat);
+    return geo;
+  }
+  const outlineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, depthWrite: false });
+  function showArrow(from, to, color) {
+    hideArrow();
+    const a = at(from), b = at(to), dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
+    arrow = new THREE.Mesh(arrowGeo(len, 0), arrowMat);
     arrow.position.set(a.x, 0.012, a.z); arrow.rotation.y = Math.atan2(-dx, -dz);
+    // by day a white outline under it, so it stands out on the wooden squares
+    const outline = new THREE.Mesh(arrowGeo(len, 0.028), outlineMat); outline.position.y = -0.002; outline.renderOrder = -1;
+    outline.visible = dayMode; arrow.add(outline); arrow.userData.outline = outline;
     arrowColor = color; paintArrow();
     board.add(arrow);
     fromMark.position.x = a.x; fromMark.position.z = a.z; fromMark.visible = true;
   }
   // By day the light wooden board needs a deeper colour (and no additive glow) to stand out.
   let arrowColor = '#57ffb0', dayMode = false;
+  // By day every arrow is the site's pink (some project colours, like amber, vanish on walnut).
+  const DAY_ARROW = '#e0206e';
   function paintArrow() {
-    const c = dayMode ? deep(arrowColor, 0.5) : arrowColor;
+    const c = dayMode ? DAY_ARROW : arrowColor;
     arrowMat.color.set(c); markMat.color.set(c);
+    if (arrow) arrow.userData.outline.visible = dayMode;
     markMat.blending = dayMode ? THREE.NormalBlending : THREE.AdditiveBlending; markMat.opacity = dayMode ? 0.4 : 0.35;
   }
   function hideArrow() {
-    if (arrow) { board.remove(arrow); arrow.geometry.dispose(); arrow = null; }
+    if (arrow) { board.remove(arrow); arrow.geometry.dispose(); arrow.userData.outline.geometry.dispose(); arrow = null; }
     fromMark.visible = false;
   }
 
