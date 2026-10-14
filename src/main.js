@@ -14,7 +14,9 @@ import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/500.css';
 import '@fontsource/jetbrains-mono/600.css';
 import '@fontsource/monoton/400.css';
-import './style.css';
+import '@fontsource/ibm-plex-sans/400.css'; // Quick view body text
+import '@fontsource/ibm-plex-sans/600.css';
+// style.css is linked from index.html so the page is styled before this script runs
 import { SECTIONS, PROJECTS, GLYPH, PROFILE } from './data/content.js';
 import { Snd } from './audio/sound.js';
 import { setMaxAnisotropy } from './scene/canvas.js';
