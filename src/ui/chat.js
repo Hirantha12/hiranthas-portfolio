@@ -16,12 +16,26 @@ const brain = () => (brainP ??= import('../ai/brain.js').then((m) => { m.warmUp(
 /* ---------- voice ---------- */
 const synth = typeof speechSynthesis !== 'undefined' ? speechSynthesis : null;
 let voice = null;
+// Picks the most human-sounding English voice the browser has. Browsers ship two kinds:
+// neural/online voices ("Microsoft … Online (Natural)" in Edge, "Google …" in Chrome) that sound
+// close to a person, and old built-in voices (e.g. Microsoft David/Ravi) that sound robotic.
+// Neural voices win, then a male voice (it's Hirantha speaking), then Indian, British or US English.
+const MALE = /\b(male|guy|prabhat|ryan|thomas|andrew|brian|christopher|eric|roger|steffan|william|daniel|david|ravi|mark|james|liam|arthur|oliver|aaron|rishi)\b/i;
+const FEMALE = /\b(female|heera|neerja|zira|susan|hazel|sonia|libby|jenny|aria|ava|emma|michelle|samantha|karen|moira|tessa|serena|kate|victoria|fiona)\b/i;
+function scoreVoice(v) {
+  if (!/^en[-_]/i.test(v.lang)) return -1;
+  let s = 0;
+  if (/natural|neural|online|premium|enhanced/i.test(v.name)) s += 100; // neural voices
+  else if (/^google/i.test(v.name)) s += 70;                             // Chrome's network voices
+  else if (!v.localService) s += 40;                                     // other cloud voices
+  if (MALE.test(v.name)) s += 25; else if (FEMALE.test(v.name)) s -= 25;
+  if (/en[-_]IN/i.test(v.lang)) s += 12; else if (/en[-_]GB/i.test(v.lang)) s += 8; else if (/en[-_]US/i.test(v.lang)) s += 6;
+  return s;
+}
 function pickVoice() {
   if (!synth) return;
-  const vs = synth.getVoices();
-  voice = vs.find((v) => /en-IN/i.test(v.lang))
-    || vs.find((v) => /^en/i.test(v.lang) && /male|david|daniel|guy|ravi/i.test(v.name) && !/female/i.test(v.name))
-    || vs.find((v) => /^en/i.test(v.lang)) || null;
+  const ranked = synth.getVoices().map((v) => [scoreVoice(v), v]).filter(([s]) => s >= 0).sort((a, b) => b[0] - a[0]);
+  voice = ranked.length ? ranked[0][1] : null;
 }
 if (synth) { pickVoice(); synth.addEventListener?.('voiceschanged', pickVoice); }
 
@@ -41,7 +55,8 @@ export function createChat({ panel, onTalk }) {
     parts.forEach((p, i) => {
       const u = new SpeechSynthesisUtterance(p.trim());
       if (voice) { u.voice = voice; u.lang = voice.lang; }
-      u.rate = 1; u.pitch = 0.95;
+      // natural pace; pitch left at 1, since shifting it is what makes voices sound synthetic
+      u.rate = 0.96; u.pitch = 1;
       if (i === parts.length - 1) { u.onend = done; u.onerror = done; }
       synth.speak(u);
     });
